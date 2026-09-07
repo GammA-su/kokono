@@ -1,0 +1,422 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum LineupStatus {
+  ANNOUNCED
+  PREORDER
+  RELEASED
+  DISCONTINUED
+  UNKNOWN
+}
+
+enum DatePrecision {
+  YEAR
+  MONTH
+  DAY
+}
+
+enum TaxInclusion {
+  INCLUDED
+  EXCLUDED
+  UNKNOWN
+}
+
+enum SourceType {
+  OFFICIAL_STORE
+  MANUFACTURER
+  OFFICIAL_ANNOUNCEMENT
+  RETAILER
+  EVENT
+  OTHER
+}
+
+enum ImageRole {
+  PRIMARY
+  PRODUCT
+  PACKAGE
+  PROMOTIONAL
+  CHARACTER_ART
+  OTHER
+}
+
+enum WatchPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum StorageLocationType {
+  JAPAN_WAREHOUSE
+  FRANCE_HOME
+  WAREHOUSE
+  IN_TRANSIT
+  SHELF
+  BOX
+  BIN
+  OTHER
+}
+
+enum MovementType {
+  PURCHASE
+  SALE
+  TRANSFER
+  RETURN
+  ADJUSTMENT
+  DAMAGED
+  LOST
+  GIFT
+  GACHA
+  OTHER
+}
+
+model Franchise {
+  id              String      @id @default(uuid()) @db.Uuid
+  name            String
+  japaneseName    String?     @map("japanese_name")
+  slug            String      @unique
+  description     String?
+  imageStorageKey String?     @map("image_storage_key")
+  aliases         String[]    @default([])
+  archivedAt      DateTime?   @map("archived_at") @db.Timestamptz(3)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  lineups         Lineup[]
+  characters      Character[]
+
+  @@map("franchises")
+}
+
+model Character {
+  id              String          @id @default(uuid()) @db.Uuid
+  franchiseId     String          @map("franchise_id") @db.Uuid
+  name            String
+  japaneseName    String?         @map("japanese_name")
+  aliases         String[]        @default([])
+  imageStorageKey String?         @map("image_storage_key")
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  franchise       Franchise       @relation(fields: [franchiseId], references: [id], onDelete: Restrict)
+  items           ItemCharacter[]
+
+  @@index([franchiseId])
+  @@map("characters")
+}
+
+model Lineup {
+  id                     String            @id @default(uuid()) @db.Uuid
+  franchiseId            String            @map("franchise_id") @db.Uuid
+  name                   String
+  japaneseName           String?           @map("japanese_name")
+  slug                   String
+  description            String?
+  manufacturer           String?
+  announcedDate          DateTime?         @map("announced_date") @db.Date
+  announcedDatePrecision DatePrecision?    @map("announced_date_precision")
+  releaseDate            DateTime?         @map("release_date") @db.Date
+  releaseDatePrecision   DatePrecision?    @map("release_date_precision")
+  status                 LineupStatus      @default(UNKNOWN)
+  mainImageStorageKey    String?           @map("main_image_storage_key")
+  notes                  String?
+  archivedAt             DateTime?         @map("archived_at") @db.Timestamptz(3)
+  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  franchise              Franchise         @relation(fields: [franchiseId], references: [id], onDelete: Restrict)
+  items                  MerchandiseItem[]
+  sources                LineupSource[]
+
+  @@unique([franchiseId, slug])
+  @@index([releaseDate])
+  @@index([createdAt])
+  @@index([manufacturer])
+  @@index([status, archivedAt])
+  @@map("lineups")
+}
+
+model LineupSource {
+  id         String     @id @default(uuid()) @db.Uuid
+  lineupId   String     @map("lineup_id") @db.Uuid
+  provider   String
+  sourceType SourceType @default(OTHER) @map("source_type")
+  url        String
+  checkedAt  DateTime?  @map("checked_at") @db.Timestamptz(3)
+  notes      String?
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  lineup     Lineup     @relation(fields: [lineupId], references: [id], onDelete: Restrict)
+
+  @@unique([lineupId, url])
+  @@map("lineup_sources")
+}
+
+model Category {
+  id       String            @id @default(uuid()) @db.Uuid
+  name     String
+  slug     String            @unique
+  parentId String?           @map("parent_id") @db.Uuid
+  parent   Category?         @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children Category[]        @relation("CategoryTree")
+  items    MerchandiseItem[]
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+/// One identifiable design/release, never a physical copy or sale offer.
+model MerchandiseItem {
+  id                       String              @id @default(uuid()) @db.Uuid
+  lineupId                 String              @map("lineup_id") @db.Uuid
+  internalSku              String              @unique @map("internal_sku")
+  janCode                  String?             @map("jan_code")
+  name                     String
+  japaneseName             String?             @map("japanese_name")
+  aliases                  String[]            @default([])
+  slug                     String              @unique
+  categoryId               String              @map("category_id") @db.Uuid
+  description              String?
+  manufacturer             String?
+  officialMsrpAmount       Int?                @map("official_msrp_amount")
+  officialMsrpCurrency     String?             @map("official_msrp_currency") @db.VarChar(3)
+  officialMsrpTaxInclusion TaxInclusion        @default(UNKNOWN) @map("official_msrp_tax_inclusion")
+  releaseDate              DateTime?           @map("release_date") @db.Date
+  releaseDatePrecision     DatePrecision?      @map("release_date_precision")
+  privateNotes             String?             @map("private_notes")
+  archivedAt               DateTime?           @map("archived_at") @db.Timestamptz(3)
+  createdAt                DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  lineup                   Lineup              @relation(fields: [lineupId], references: [id], onDelete: Restrict)
+  category                 Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  characters               ItemCharacter[]
+  sources                  ItemSource[]
+  images                   ItemImage[]
+  purchaseWatch            PurchaseWatch?
+  inventoryBalances        InventoryBalance[]
+  inventoryMovements       InventoryMovement[]
+  saleListing              SaleListing?
+
+  @@index([lineupId])
+  @@index([categoryId])
+  @@index([name])
+  @@index([japaneseName])
+  @@index([janCode])
+  @@index([releaseDate])
+  @@map("merchandise_items")
+}
+
+model ItemCharacter {
+  merchandiseItemId String          @map("merchandise_item_id") @db.Uuid
+  characterId       String          @map("character_id") @db.Uuid
+  merchandiseItem   MerchandiseItem @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+  character         Character       @relation(fields: [characterId], references: [id], onDelete: Restrict)
+
+  @@id([merchandiseItemId, characterId])
+  @@index([characterId])
+  @@map("item_characters")
+}
+
+model ItemSource {
+  id                String          @id @default(uuid()) @db.Uuid
+  merchandiseItemId String          @map("merchandise_item_id") @db.Uuid
+  provider          String
+  sourceType        SourceType      @default(OTHER) @map("source_type")
+  url               String
+  checkedAt         DateTime?       @map("checked_at") @db.Timestamptz(3)
+  notes             String?
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  merchandiseItem   MerchandiseItem @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+
+  @@index([merchandiseItemId])
+  @@map("item_sources")
+}
+
+model ItemImage {
+  id                   String          @id @default(uuid()) @db.Uuid
+  merchandiseItemId    String          @map("merchandise_item_id") @db.Uuid
+  storageKey           String          @map("storage_key")
+  originalUrl          String?         @map("original_url")
+  sourceUrl            String?         @map("source_url")
+  sourceProvider       String?         @map("source_provider")
+  imageRole            ImageRole       @default(PRODUCT) @map("image_role")
+  caption              String?
+  displayOrder         Int             @default(0) @map("display_order")
+  approvedForPublicUse Boolean         @default(false) @map("approved_for_public_use")
+  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  merchandiseItem      MerchandiseItem @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+
+  @@index([merchandiseItemId, displayOrder])
+  @@map("item_images")
+}
+
+model PurchaseWatch {
+  id                     String          @id @default(uuid()) @db.Uuid
+  merchandiseItemId      String          @unique @map("merchandise_item_id") @db.Uuid
+  enabled                Boolean         @default(true)
+  targetQuantity         Int?            @map("target_quantity")
+  maxUnitPriceAmount     Int?            @map("max_unit_price_amount")
+  maxUnitPriceCurrency   String          @default("JPY") @map("max_unit_price_currency") @db.VarChar(3)
+  priority               WatchPriority   @default(NORMAL)
+  conditionPreference    String?         @map("condition_preference")
+  marketplaceSearchQuery String?         @map("marketplace_search_query")
+  notes                  String?
+  lastCheckedAt          DateTime?       @map("last_checked_at") @db.Timestamptz(3)
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  merchandiseItem        MerchandiseItem @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+
+  @@index([enabled, priority])
+  @@map("purchase_watches")
+}
+
+model StorageLocation {
+  id                 String              @id @default(uuid()) @db.Uuid
+  code               String              @unique
+  name               String
+  type               StorageLocationType @default(OTHER)
+  parentId           String?             @map("parent_id") @db.Uuid
+  active             Boolean             @default(true)
+  /// Explicit opt-in at the exact balance location; never inherited from a parent.
+  fulfillmentEnabled Boolean             @default(false) @map("fulfillment_enabled")
+  notes              String?
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  parent             StorageLocation?    @relation("LocationTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children           StorageLocation[]   @relation("LocationTree")
+  inventoryBalances  InventoryBalance[]
+  outgoingMovements  InventoryMovement[] @relation("MovementSource")
+  incomingMovements  InventoryMovement[] @relation("MovementDestination")
+
+  @@index([parentId])
+  @@map("storage_locations")
+}
+
+model InventoryBalance {
+  merchandiseItemId String          @map("merchandise_item_id") @db.Uuid
+  storageLocationId String          @map("storage_location_id") @db.Uuid
+  quantity          Int             @default(0)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  merchandiseItem   MerchandiseItem @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+  storageLocation   StorageLocation @relation(fields: [storageLocationId], references: [id], onDelete: Restrict)
+
+  @@id([merchandiseItemId, storageLocationId])
+  @@index([storageLocationId])
+  @@map("inventory_balances")
+}
+
+/// Append-only. TRANSFER uses positive units moved; all other deltas are signed ownership changes.
+model InventoryMovement {
+  id                          String           @id @default(uuid()) @db.Uuid
+  merchandiseItemId           String           @map("merchandise_item_id") @db.Uuid
+  movementType                MovementType     @map("movement_type")
+  quantityDelta               Int              @map("quantity_delta")
+  sourceLocationId            String?          @map("source_location_id") @db.Uuid
+  destinationLocationId       String?          @map("destination_location_id") @db.Uuid
+  operationKey                String           @unique @map("operation_key") @db.VarChar(200)
+  requestFingerprint          String           @map("request_fingerprint") @db.VarChar(64)
+  actorUserId                 String?          @map("actor_user_id")
+  acquisitionUnitCostAmount   Int?             @map("acquisition_unit_cost_amount")
+  acquisitionUnitCostCurrency String?          @map("acquisition_unit_cost_currency") @db.VarChar(3)
+  notes                       String?
+  referenceType               String?          @map("reference_type")
+  referenceId                 String?          @map("reference_id")
+  createdAt                   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  merchandiseItem             MerchandiseItem  @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+  sourceLocation              StorageLocation? @relation("MovementSource", fields: [sourceLocationId], references: [id], onDelete: Restrict)
+  destinationLocation         StorageLocation? @relation("MovementDestination", fields: [destinationLocationId], references: [id], onDelete: Restrict)
+  actorUser                   User?            @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([merchandiseItemId, createdAt])
+  @@index([sourceLocationId])
+  @@index([destinationLocationId])
+  @@index([actorUserId])
+  @@map("inventory_movements")
+}
+
+model SaleListing {
+  id                   String          @id @default(uuid()) @db.Uuid
+  merchandiseItemId    String          @unique @map("merchandise_item_id") @db.Uuid
+  publicTitle          String?         @map("public_title")
+  slug                 String          @unique
+  publicDescription    String?         @map("public_description")
+  sellingPriceAmount   Int             @map("selling_price_amount")
+  sellingPriceCurrency String          @map("selling_price_currency") @db.VarChar(3)
+  published            Boolean         @default(false)
+  featured             Boolean         @default(false)
+  publishedAt          DateTime?       @map("published_at") @db.Timestamptz(3)
+  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  merchandiseItem      MerchandiseItem @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+
+  @@index([published, featured])
+  @@map("sale_listings")
+}
+
+// Better Auth core schema. Membership is explicitly provisioned, never accepted from signup input.
+model User {
+  id            String              @id
+  name          String
+  email         String              @unique
+  emailVerified Boolean             @default(false) @map("email_verified")
+  image         String?
+  isInternal    Boolean             @default(false) @map("is_internal")
+  active        Boolean             @default(true)
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  sessions      Session[]
+  accounts      Account[]
+  movements     InventoryMovement[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  token     String   @unique
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  userId                String    @map("user_id")
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at") @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at") @db.Timestamptz(3)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([identifier])
+  @@map("verifications")
+}

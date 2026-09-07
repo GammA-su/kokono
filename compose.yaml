@@ -1,0 +1,20 @@
+name: kokono-inv
+services:
+  postgres:
+    image: postgres:18.3-alpine
+    environment:
+      POSTGRES_USER: kokono
+      POSTGRES_PASSWORD: kokono_local_only
+      POSTGRES_DB: kokono_dev
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./scripts/init-test-database.sql:/docker-entrypoint-initdb.d/10-test-database.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kokono -d kokono_dev"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+volumes:
+  postgres_data:
