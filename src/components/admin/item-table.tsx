@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { createLineupQueries } from "@/modules/lineups/queries";
+import { formatPartialDate } from "@/modules/catalog/partial-date";
 import { MediaImage } from "@/components/ui/media-image";
+import { ItemSelectionCheckbox } from "./bulk-selection";
 
 type Item = NonNullable<
   Awaited<ReturnType<ReturnType<typeof createLineupQueries>["detail"]>>
@@ -17,9 +19,13 @@ export function ItemTable({
       <table className="data-table items-table">
         <thead>
           <tr>
+            <th>
+              <span className="sr-only">Select item</span>
+            </th>
             <th>Merchandise item</th>
             <th>Characters</th>
             <th>Category</th>
+            <th>Release</th>
             <th className="numeric">MSRP · JPY</th>
             <th>JAN</th>
             <th className="numeric">Stock</th>
@@ -33,13 +39,18 @@ export function ItemTable({
           {items.map((item) => (
             <tr key={item.id}>
               <td>
+                <ItemSelectionCheckbox id={item.id} name={item.name} />
+              </td>
+              <td>
                 <div className="lineup-cell">
                   <MediaImage
                     reference={item.images[0]?.storageKey}
                     alt={item.name}
                   />
                   <span>
-                    <strong>{item.name}</strong>
+                    <Link href={`/admin/merchandise/catalog/${item.id}`}>
+                      <strong>{item.name}</strong>
+                    </Link>
                     {item.japaneseName && (
                       <span className="japanese" lang="ja">
                         {item.japaneseName}
@@ -55,6 +66,12 @@ export function ItemTable({
                   .join(", ") || <span className="muted">—</span>}
               </td>
               <td className="nowrap">{item.category.name}</td>
+              <td className="nowrap">
+                {formatPartialDate(
+                  item.releaseDate,
+                  item.releaseDatePrecision,
+                ) ?? <span className="muted">—</span>}
+              </td>
               <td className="numeric nowrap">
                 {item.officialMsrpAmount !== null &&
                 item.officialMsrpCurrency === "JPY" ? (

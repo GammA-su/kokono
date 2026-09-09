@@ -153,6 +153,36 @@ export function createCatalogService(
   authorize: Authorize,
 ) {
   return {
+    setCategory: (input: unknown) =>
+      withInternalTransaction(database, authorize, async (tx) => {
+        const data = z
+          .object({ merchandiseItemId: entityId, categoryId: entityId })
+          .strict()
+          .parse(input);
+        if (!(await tx.category.findUnique({ where: { id: data.categoryId } })))
+          throw new DomainError(
+            "CATEGORY_NOT_FOUND",
+            "Choose an existing category.",
+          );
+        return tx.merchandiseItem.update({
+          where: { id: data.merchandiseItemId },
+          data: { categoryId: data.categoryId },
+        });
+      }),
+    disablePurchaseWatch: (input: unknown) =>
+      withInternalTransaction(database, authorize, (tx) =>
+        tx.purchaseWatch.updateMany({
+          where: { merchandiseItemId: entityId.parse(input), enabled: true },
+          data: { enabled: false },
+        }),
+      ),
+    markPurchaseWatchChecked: (input: unknown) =>
+      withInternalTransaction(database, authorize, (tx) =>
+        tx.purchaseWatch.update({
+          where: { merchandiseItemId: entityId.parse(input) },
+          data: { lastCheckedAt: new Date() },
+        }),
+      ),
     createFranchise: (input: unknown) =>
       withInternalTransaction(database, authorize, (tx) =>
         tx.franchise.create({ data: franchiseSchema.parse(input) }),
@@ -220,13 +250,29 @@ export function createCatalogService(
           },
         });
       }),
-    savePurchaseWatch: (input: unknown) =>
-      withInternalTransaction(database, authorize, (tx) => {
+    savePurchaseWatch: (input: unknown, expectedVersion?: string | null) =>
+      withInternalTransaction(database, authorize, async (tx) => {
         const data = watchSchema.parse(input);
+        await tx.$queryRaw`SELECT id FROM merchandise_items WHERE id = ${data.merchandiseItemId}::uuid FOR UPDATE`;
+        if (expectedVersion !== undefined) {
+          const current = await tx.$queryRaw<
+            { updatedAt: Date }[]
+          >`SELECT updated_at AS "updatedAt" FROM purchase_watches WHERE merchandise_item_id = ${data.merchandiseItemId}::uuid FOR UPDATE`;
+          if ((current[0]?.updatedAt.toISOString() ?? null) !== expectedVersion)
+            throw new DomainError(
+              "EDIT_CONFLICT",
+              "This watch changed after the form was opened. Reload before saving to avoid overwriting newer sourcing data.",
+            );
+        }
         return tx.purchaseWatch.upsert({
           where: { merchandiseItemId: data.merchandiseItemId },
           create: data,
-          update: data,
+          // Shared bulk defaults must not erase unmentioned sourcing notes/search text.
+          update: Object.fromEntries(
+            Object.entries(data).filter(([key]) =>
+              Object.hasOwn(input as object, key),
+            ),
+          ),
         });
       }),
     addSource: (input: unknown) =>

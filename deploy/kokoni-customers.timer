@@ -1,0 +1,8 @@
+[Unit]
+Description=Kokoni expired customer records daily
+[Timer]
+OnCalendar=*-*-* 02:10:00 UTC
+Persistent=true
+Unit=kokoni-job@customer-maintenance.service
+[Install]
+WantedBy=timers.target

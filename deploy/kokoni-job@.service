@@ -1,0 +1,18 @@
+# Reference systemd template. One host owns timers; fleet-wide scheduling needs external ownership.
+[Unit]
+Description=Kokoni maintenance %i
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=kokoni
+WorkingDirectory=/opt/kokoni/backend/current
+EnvironmentFile=/etc/kokoni/backend.env
+ExecStart=/usr/bin/node --import tsx scripts/%i.ts
+TimeoutStartSec=15min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/kokoni/media
+StandardOutput=journal
+StandardError=journal

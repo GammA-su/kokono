@@ -76,6 +76,36 @@ enum MovementType {
   OTHER
 }
 
+enum MarketplaceListingStatus {
+  AVAILABLE
+  SOLD
+  EXPIRED
+  PURCHASED
+  REJECTED
+  UNKNOWN
+}
+
+enum PurchaseStatus {
+  DRAFT
+  ORDERED
+  PAID
+  RECEIVED_JAPAN
+  CANCELLED
+  REFUNDED
+  OTHER
+}
+
+enum ShipmentStatus {
+  DRAFT
+  PACKING
+  READY
+  SHIPPED
+  IN_TRANSIT
+  CUSTOMS
+  DELIVERED
+  CANCELLED
+}
+
 model Franchise {
   id              String      @id @default(uuid()) @db.Uuid
   name            String
@@ -155,42 +185,49 @@ model LineupSource {
 }
 
 model Category {
-  id       String            @id @default(uuid()) @db.Uuid
-  name     String
-  slug     String            @unique
-  parentId String?           @map("parent_id") @db.Uuid
-  parent   Category?         @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children Category[]        @relation("CategoryTree")
-  items    MerchandiseItem[]
+  publicCategoryId String?           @map("public_category_id") @db.Uuid
+  publicCategory   PublicCategory?   @relation(fields: [publicCategoryId], references: [id], onDelete: Restrict)
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String            @unique
+  parentId         String?           @map("parent_id") @db.Uuid
+  parent           Category?         @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children         Category[]        @relation("CategoryTree")
+  items            MerchandiseItem[]
 
+  @@index([publicCategoryId])
   @@index([parentId])
   @@map("categories")
 }
 
 /// One identifiable design/release, never a physical copy or sale offer.
 model MerchandiseItem {
-  id                       String              @id @default(uuid()) @db.Uuid
-  lineupId                 String              @map("lineup_id") @db.Uuid
-  internalSku              String              @unique @map("internal_sku")
-  janCode                  String?             @map("jan_code")
+  gachaRewards             GachaReward[]
+  gachaPrizes              GachaPrize[]
+  orderItems               OrderItem[]
+  reservations             InventoryReservation[]
+  id                       String                 @id @default(uuid()) @db.Uuid
+  lineupId                 String                 @map("lineup_id") @db.Uuid
+  internalSku              String                 @unique @map("internal_sku")
+  janCode                  String?                @map("jan_code")
   name                     String
-  japaneseName             String?             @map("japanese_name")
-  aliases                  String[]            @default([])
-  slug                     String              @unique
-  categoryId               String              @map("category_id") @db.Uuid
+  japaneseName             String?                @map("japanese_name")
+  aliases                  String[]               @default([])
+  slug                     String                 @unique
+  categoryId               String                 @map("category_id") @db.Uuid
   description              String?
   manufacturer             String?
-  officialMsrpAmount       Int?                @map("official_msrp_amount")
-  officialMsrpCurrency     String?             @map("official_msrp_currency") @db.VarChar(3)
-  officialMsrpTaxInclusion TaxInclusion        @default(UNKNOWN) @map("official_msrp_tax_inclusion")
-  releaseDate              DateTime?           @map("release_date") @db.Date
-  releaseDatePrecision     DatePrecision?      @map("release_date_precision")
-  privateNotes             String?             @map("private_notes")
-  archivedAt               DateTime?           @map("archived_at") @db.Timestamptz(3)
-  createdAt                DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt                DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
-  lineup                   Lineup              @relation(fields: [lineupId], references: [id], onDelete: Restrict)
-  category                 Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  officialMsrpAmount       Int?                   @map("official_msrp_amount")
+  officialMsrpCurrency     String?                @map("official_msrp_currency") @db.VarChar(3)
+  officialMsrpTaxInclusion TaxInclusion           @default(UNKNOWN) @map("official_msrp_tax_inclusion")
+  releaseDate              DateTime?              @map("release_date") @db.Date
+  releaseDatePrecision     DatePrecision?         @map("release_date_precision")
+  privateNotes             String?                @map("private_notes")
+  archivedAt               DateTime?              @map("archived_at") @db.Timestamptz(3)
+  createdAt                DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  lineup                   Lineup                 @relation(fields: [lineupId], references: [id], onDelete: Restrict)
+  category                 Category               @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   characters               ItemCharacter[]
   sources                  ItemSource[]
   images                   ItemImage[]
@@ -198,6 +235,9 @@ model MerchandiseItem {
   inventoryBalances        InventoryBalance[]
   inventoryMovements       InventoryMovement[]
   saleListing              SaleListing?
+  purchaseItems            PurchaseItem[]
+  marketplaceListings      MarketplaceListing[]
+  shipmentItems            ShipmentItem[]
 
   @@index([lineupId])
   @@index([categoryId])
@@ -235,18 +275,19 @@ model ItemSource {
 }
 
 model ItemImage {
-  id                   String          @id @default(uuid()) @db.Uuid
-  merchandiseItemId    String          @map("merchandise_item_id") @db.Uuid
-  storageKey           String          @map("storage_key")
-  originalUrl          String?         @map("original_url")
-  sourceUrl            String?         @map("source_url")
-  sourceProvider       String?         @map("source_provider")
-  imageRole            ImageRole       @default(PRODUCT) @map("image_role")
+  listingImages        SaleListingImage[]
+  id                   String             @id @default(uuid()) @db.Uuid
+  merchandiseItemId    String             @map("merchandise_item_id") @db.Uuid
+  storageKey           String             @map("storage_key")
+  originalUrl          String?            @map("original_url")
+  sourceUrl            String?            @map("source_url")
+  sourceProvider       String?            @map("source_provider")
+  imageRole            ImageRole          @default(PRODUCT) @map("image_role")
   caption              String?
-  displayOrder         Int             @default(0) @map("display_order")
-  approvedForPublicUse Boolean         @default(false) @map("approved_for_public_use")
-  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  merchandiseItem      MerchandiseItem @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+  displayOrder         Int                @default(0) @map("display_order")
+  approvedForPublicUse Boolean            @default(false) @map("approved_for_public_use")
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  merchandiseItem      MerchandiseItem    @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
 
   @@index([merchandiseItemId, displayOrder])
   @@map("item_images")
@@ -273,22 +314,29 @@ model PurchaseWatch {
 }
 
 model StorageLocation {
-  id                 String              @id @default(uuid()) @db.Uuid
-  code               String              @unique
-  name               String
-  type               StorageLocationType @default(OTHER)
-  parentId           String?             @map("parent_id") @db.Uuid
-  active             Boolean             @default(true)
+  reservations          InventoryReservation[]
+  id                    String                 @id @default(uuid()) @db.Uuid
+  code                  String                 @unique
+  name                  String
+  type                  StorageLocationType    @default(OTHER)
+  parentId              String?                @map("parent_id") @db.Uuid
+  /// Physical country; null inherits from parent. Transit is excluded from country stock totals.
+  countryCode           String?                @map("country_code") @db.VarChar(2)
+  active                Boolean                @default(true)
   /// Explicit opt-in at the exact balance location; never inherited from a parent.
-  fulfillmentEnabled Boolean             @default(false) @map("fulfillment_enabled")
-  notes              String?
-  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
-  parent             StorageLocation?    @relation("LocationTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children           StorageLocation[]   @relation("LocationTree")
-  inventoryBalances  InventoryBalance[]
-  outgoingMovements  InventoryMovement[] @relation("MovementSource")
-  incomingMovements  InventoryMovement[] @relation("MovementDestination")
+  fulfillmentEnabled    Boolean                @default(false) @map("fulfillment_enabled")
+  notes                 String?
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  parent                StorageLocation?       @relation("LocationTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children              StorageLocation[]      @relation("LocationTree")
+  inventoryBalances     InventoryBalance[]
+  outgoingMovements     InventoryMovement[]    @relation("MovementSource")
+  incomingMovements     InventoryMovement[]    @relation("MovementDestination")
+  originatingShipments  Shipment[]             @relation("ShipmentOrigin")
+  destinationShipments  Shipment[]             @relation("ShipmentDestination")
+  transitGroupShipments Shipment[]             @relation("ShipmentTransitParent")
+  transitShipment       Shipment?              @relation("ShipmentTransit")
 
   @@index([parentId])
   @@map("storage_locations")
@@ -309,66 +357,550 @@ model InventoryBalance {
 
 /// Append-only. TRANSFER uses positive units moved; all other deltas are signed ownership changes.
 model InventoryMovement {
-  id                          String           @id @default(uuid()) @db.Uuid
-  merchandiseItemId           String           @map("merchandise_item_id") @db.Uuid
-  movementType                MovementType     @map("movement_type")
-  quantityDelta               Int              @map("quantity_delta")
-  sourceLocationId            String?          @map("source_location_id") @db.Uuid
-  destinationLocationId       String?          @map("destination_location_id") @db.Uuid
-  operationKey                String           @unique @map("operation_key") @db.VarChar(200)
-  requestFingerprint          String           @map("request_fingerprint") @db.VarChar(64)
-  actorUserId                 String?          @map("actor_user_id")
-  acquisitionUnitCostAmount   Int?             @map("acquisition_unit_cost_amount")
-  acquisitionUnitCostCurrency String?          @map("acquisition_unit_cost_currency") @db.VarChar(3)
+  consumedReservation         InventoryReservation?
+  id                          String                @id @default(uuid()) @db.Uuid
+  merchandiseItemId           String                @map("merchandise_item_id") @db.Uuid
+  movementType                MovementType          @map("movement_type")
+  quantityDelta               Int                   @map("quantity_delta")
+  sourceLocationId            String?               @map("source_location_id") @db.Uuid
+  destinationLocationId       String?               @map("destination_location_id") @db.Uuid
+  operationKey                String                @unique @map("operation_key") @db.VarChar(200)
+  requestFingerprint          String                @map("request_fingerprint") @db.VarChar(64)
+  actorUserId                 String?               @map("actor_user_id")
+  acquisitionUnitCostAmount   Int?                  @map("acquisition_unit_cost_amount")
+  acquisitionUnitCostCurrency String?               @map("acquisition_unit_cost_currency") @db.VarChar(3)
   notes                       String?
-  referenceType               String?          @map("reference_type")
-  referenceId                 String?          @map("reference_id")
-  createdAt                   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  merchandiseItem             MerchandiseItem  @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
-  sourceLocation              StorageLocation? @relation("MovementSource", fields: [sourceLocationId], references: [id], onDelete: Restrict)
-  destinationLocation         StorageLocation? @relation("MovementDestination", fields: [destinationLocationId], references: [id], onDelete: Restrict)
-  actorUser                   User?            @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  referenceType               String?               @map("reference_type")
+  referenceId                 String?               @map("reference_id")
+  createdAt                   DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  merchandiseItem             MerchandiseItem       @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+  sourceLocation              StorageLocation?      @relation("MovementSource", fields: [sourceLocationId], references: [id], onDelete: Restrict)
+  destinationLocation         StorageLocation?      @relation("MovementDestination", fields: [destinationLocationId], references: [id], onDelete: Restrict)
+  actorUser                   User?                 @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  receivedPurchaseItem        PurchaseItem?
+  dispatchedShipmentItem      ShipmentItem?         @relation("ShipmentDispatch")
+  deliveredShipmentItem       ShipmentItem?         @relation("ShipmentDelivery")
 
   @@index([merchandiseItemId, createdAt])
+  @@index([createdAt(sort: Desc), id(sort: Desc)])
   @@index([sourceLocationId])
   @@index([destinationLocationId])
   @@index([actorUserId])
   @@map("inventory_movements")
 }
 
-model SaleListing {
-  id                   String          @id @default(uuid()) @db.Uuid
-  merchandiseItemId    String          @unique @map("merchandise_item_id") @db.Uuid
-  publicTitle          String?         @map("public_title")
-  slug                 String          @unique
-  publicDescription    String?         @map("public_description")
-  sellingPriceAmount   Int             @map("selling_price_amount")
-  sellingPriceCurrency String          @map("selling_price_currency") @db.VarChar(3)
-  published            Boolean         @default(false)
-  featured             Boolean         @default(false)
-  publishedAt          DateTime?       @map("published_at") @db.Timestamptz(3)
-  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt            DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
-  merchandiseItem      MerchandiseItem @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+model MarketplaceListing {
+  id                     String                   @id @default(uuid()) @db.Uuid
+  merchandiseItemId      String                   @map("merchandise_item_id") @db.Uuid
+  marketplace            String
+  externalListingId      String?                  @map("external_listing_id")
+  url                    String
+  sellerName             String?                  @map("seller_name")
+  itemPriceAmount        Int                      @map("item_price_amount")
+  currency               String                   @db.VarChar(3)
+  domesticShippingAmount Int?                     @map("domestic_shipping_amount")
+  condition              String?
+  status                 MarketplaceListingStatus @default(UNKNOWN)
+  discoveredAt           DateTime                 @default(now()) @map("discovered_at") @db.Timestamptz(3)
+  lastCheckedAt          DateTime?                @map("last_checked_at") @db.Timestamptz(3)
+  notes                  String?
+  purchaseItemId         String?                  @unique @map("purchase_item_id") @db.Uuid
+  conversionFingerprint  String?                  @map("conversion_fingerprint") @db.VarChar(64)
+  creationFingerprint    String                   @map("creation_fingerprint") @db.VarChar(64)
+  createdByUserId        String                   @map("created_by_user_id")
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  merchandiseItem        MerchandiseItem          @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+  purchaseItem           PurchaseItem?            @relation(fields: [purchaseItemId], references: [id], onDelete: Restrict)
+  createdBy              User                     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
 
+  @@unique([merchandiseItemId, url])
+  @@unique([merchandiseItemId, marketplace, externalListingId])
+  @@index([status, discoveredAt, id])
+  @@map("marketplace_listings")
+}
+
+model Purchase {
+  id                     String         @id @default(uuid()) @db.Uuid
+  supplier               String
+  marketplace            String?
+  externalReference      String?        @map("external_reference")
+  purchaseDate           DateTime       @map("purchase_date") @db.Date
+  currency               String         @db.VarChar(3)
+  subtotalAmount         Int            @map("subtotal_amount")
+  domesticShippingAmount Int            @default(0) @map("domestic_shipping_amount")
+  feesAmount             Int            @default(0) @map("fees_amount")
+  taxesAmount            Int            @default(0) @map("taxes_amount")
+  status                 PurchaseStatus @default(DRAFT)
+  notes                  String?
+  creationFingerprint    String         @map("creation_fingerprint") @db.VarChar(64)
+  createdByUserId        String         @map("created_by_user_id")
+  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy              User           @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  items                  PurchaseItem[]
+
+  @@index([purchaseDate, id])
+  @@index([status, createdAt])
+  @@index([externalReference])
+  @@map("purchases")
+}
+
+/// One purchase line is received in full once. Split separate deliveries into separate purchase lines.
+model PurchaseItem {
+  id                  String              @id @default(uuid()) @db.Uuid
+  purchaseId          String              @map("purchase_id") @db.Uuid
+  merchandiseItemId   String              @map("merchandise_item_id") @db.Uuid
+  position            Int
+  quantity            Int
+  unitPriceAmount     Int                 @map("unit_price_amount")
+  condition           String?
+  sellerListingUrl    String?             @map("seller_listing_url")
+  notes               String?
+  receivedMovementId  String?             @unique @map("received_movement_id") @db.Uuid
+  receivedAt          DateTime?           @map("received_at") @db.Timestamptz(3)
+  receivedCountryCode String?             @map("received_country_code") @db.VarChar(2)
+  purchase            Purchase            @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  merchandiseItem     MerchandiseItem     @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+  receivedMovement    InventoryMovement?  @relation(fields: [receivedMovementId], references: [id], onDelete: Restrict)
+  marketplaceListing  MarketplaceListing?
+  landedCostLines     LandedCostLine[]
+
+  @@unique([purchaseId, position])
+  @@index([merchandiseItemId])
+  @@map("purchase_items")
+}
+
+model Shipment {
+  id                      String                  @id @default(uuid()) @db.Uuid
+  number                  Int                     @unique @default(autoincrement())
+  originLocationId        String                  @map("origin_location_id") @db.Uuid
+  destinationLocationId   String                  @map("destination_location_id") @db.Uuid
+  transitParentId         String                  @map("transit_parent_id") @db.Uuid
+  transitLocationId       String?                 @unique @map("transit_location_id") @db.Uuid
+  carrier                 String?
+  carrierService          String?                 @map("carrier_service")
+  trackingNumber          String?                 @map("tracking_number")
+  shipmentDate            DateTime?               @map("shipment_date") @db.Date
+  arrivalDate             DateTime?               @map("arrival_date") @db.Date
+  status                  ShipmentStatus          @default(DRAFT)
+  packageCount            Int                     @default(1) @map("package_count")
+  totalWeight             Decimal?                @map("total_weight") @db.Decimal(12, 3)
+  weightUnit              String?                 @map("weight_unit") @db.VarChar(2)
+  shippingCostAmount      Int?                    @map("shipping_cost_amount")
+  shippingCurrency        String?                 @map("shipping_currency") @db.VarChar(3)
+  insuranceCostAmount     Int?                    @map("insurance_cost_amount")
+  otherShippingFeesAmount Int?                    @map("other_shipping_fees_amount")
+  customsDutyAmount       Int?                    @map("customs_duty_amount")
+  importVatAmount         Int?                    @map("import_vat_amount")
+  carrierCustomsFeeAmount Int?                    @map("carrier_customs_fee_amount")
+  otherImportFeesAmount   Int?                    @map("other_import_fees_amount")
+  importCurrency          String?                 @map("import_currency") @db.VarChar(3)
+  notes                   String?
+  creationFingerprint     String                  @map("creation_fingerprint") @db.VarChar(64)
+  createdByUserId         String                  @map("created_by_user_id")
+  createdAt               DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  originLocation          StorageLocation         @relation("ShipmentOrigin", fields: [originLocationId], references: [id], onDelete: Restrict)
+  destinationLocation     StorageLocation         @relation("ShipmentDestination", fields: [destinationLocationId], references: [id], onDelete: Restrict)
+  transitParent           StorageLocation         @relation("ShipmentTransitParent", fields: [transitParentId], references: [id], onDelete: Restrict)
+  transitLocation         StorageLocation?        @relation("ShipmentTransit", fields: [transitLocationId], references: [id], onDelete: Restrict)
+  createdBy               User                    @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  items                   ShipmentItem[]
+  landedCostCalculations  LandedCostCalculation[]
+
+  @@index([status, createdAt])
+  @@map("shipments")
+}
+
+model ShipmentItem {
+  id                 String             @id @default(uuid()) @db.Uuid
+  shipmentId         String             @map("shipment_id") @db.Uuid
+  merchandiseItemId  String             @map("merchandise_item_id") @db.Uuid
+  quantity           Int
+  dispatchMovementId String?            @unique @map("dispatch_movement_id") @db.Uuid
+  deliveryMovementId String?            @unique @map("delivery_movement_id") @db.Uuid
+  shipment           Shipment           @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  merchandiseItem    MerchandiseItem    @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+  dispatchMovement   InventoryMovement? @relation("ShipmentDispatch", fields: [dispatchMovementId], references: [id], onDelete: Restrict)
+  deliveryMovement   InventoryMovement? @relation("ShipmentDelivery", fields: [deliveryMovementId], references: [id], onDelete: Restrict)
+  landedCostLines    LandedCostLine[]
+
+  @@unique([shipmentId, merchandiseItemId])
+  @@index([merchandiseItemId])
+  @@map("shipment_items")
+}
+
+model LandedCostSettings {
+  id              String   @id @default("global")
+  currency        String   @db.VarChar(3)
+  importVatAsCost Boolean  @map("import_vat_as_cost")
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("landed_cost_settings")
+}
+
+/// Finalized snapshots are append-only; revisions create another calculation.
+model LandedCostCalculation {
+  id                  String           @id @db.Uuid
+  shipmentId          String           @map("shipment_id") @db.Uuid
+  method              String
+  revision            Int
+  creationTransaction BigInt           @default(dbgenerated("txid_current()")) @map("creation_transaction")
+  currency            String           @db.VarChar(3)
+  importVatAsCost     Boolean          @map("import_vat_as_cost")
+  reviewHash          String           @map("review_hash") @db.VarChar(64)
+  snapshot            Json
+  totalAmount         BigInt           @map("total_amount")
+  createdByUserId     String           @map("created_by_user_id")
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  shipment            Shipment         @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  createdBy           User             @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  lines               LandedCostLine[]
+
+  @@unique([shipmentId, revision])
+  @@index([shipmentId, createdAt, id])
+  @@map("landed_cost_calculations")
+}
+
+model LandedCostLine {
+  id              String                @id @default(uuid()) @db.Uuid
+  calculationId   String                @map("calculation_id") @db.Uuid
+  shipmentItemId  String                @map("shipment_item_id") @db.Uuid
+  purchaseItemId  String                @map("purchase_item_id") @db.Uuid
+  unitOffset      Int                   @map("unit_offset")
+  quantity        Int
+  /// Snapshot of component totals in the calculation currency, as integer minor-unit strings.
+  components      Json
+  totalAmount     BigInt                @map("total_amount")
+  unitWeightGrams Decimal?              @map("unit_weight_grams") @db.Decimal(12, 3)
+  calculation     LandedCostCalculation @relation(fields: [calculationId], references: [id], onDelete: Restrict)
+  shipmentItem    ShipmentItem          @relation(fields: [shipmentItemId], references: [id], onDelete: Restrict)
+  purchaseItem    PurchaseItem          @relation(fields: [purchaseItemId], references: [id], onDelete: Restrict)
+
+  @@index([purchaseItemId])
+  @@index([shipmentItemId, calculationId])
+  @@map("landed_cost_lines")
+}
+
+model PublicCategory {
+  id           String        @id @default(uuid()) @db.Uuid
+  slug         String        @unique
+  name         String
+  displayOrder Int           @default(0) @map("display_order")
+  active       Boolean       @default(true)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  categories   Category[]
+  listings     SaleListing[]
+
+  @@map("public_categories")
+}
+
+model SaleListingImage {
+  listingId    String      @map("listing_id") @db.Uuid
+  itemImageId  String      @map("item_image_id") @db.Uuid
+  displayOrder Int         @map("display_order")
+  listing      SaleListing @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  itemImage    ItemImage   @relation(fields: [itemImageId], references: [id], onDelete: Restrict)
+
+  @@id([listingId, itemImageId])
+  @@unique([listingId, displayOrder])
+  @@index([itemImageId])
+  @@map("sale_listing_images")
+}
+
+model SaleListing {
+  orderItems               OrderItem[]
+  publicSubtitle           String?            @map("public_subtitle")
+  seoTitle                 String?            @map("seo_title")
+  seoDescription           String?            @map("seo_description")
+  sellingPriceTaxInclusion TaxInclusion       @default(UNKNOWN) @map("selling_price_tax_inclusion")
+  publicCategoryId         String?            @map("public_category_id") @db.Uuid
+  publicCategory           PublicCategory?    @relation(fields: [publicCategoryId], references: [id], onDelete: Restrict)
+  images                   SaleListingImage[]
+  id                       String             @id @default(uuid()) @db.Uuid
+  merchandiseItemId        String             @unique @map("merchandise_item_id") @db.Uuid
+  publicTitle              String?            @map("public_title")
+  slug                     String             @unique
+  publicDescription        String?            @map("public_description")
+  sellingPriceAmount       Int                @map("selling_price_amount")
+  sellingPriceCurrency     String             @map("selling_price_currency") @db.VarChar(3)
+  published                Boolean            @default(false)
+  featured                 Boolean            @default(false)
+  publishedAt              DateTime?          @map("published_at") @db.Timestamptz(3)
+  createdAt                DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  merchandiseItem          MerchandiseItem    @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+
+  @@index([publicCategoryId])
   @@index([published, featured])
   @@map("sale_listings")
 }
 
+enum OrderStatus {
+  PENDING
+  PAID
+  PREPARING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum OrderPaymentStatus {
+  UNPAID
+  PAID
+  FAILED
+  REVIEW
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum ReservationStatus {
+  HELD
+  CONFIRMED
+  RELEASED
+  CONSUMED
+}
+
+enum PaymentAttemptStatus {
+  CREATED
+  OPEN
+  SUCCEEDED
+  FAILED
+  REVIEW
+}
+
+enum FulfillmentOrigin {
+  ORDER
+  GACHA
+}
+
+enum FulfillmentStatus {
+  READY
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+/// Guest credentials are hashed; this is not an internal Better Auth account.
+model CheckoutQuote {
+  id          String   @id @default(uuid()) @db.Uuid
+  guestHash   String   @map("guest_hash") @db.VarChar(64)
+  request     Json
+  snapshot    Json
+  fingerprint String   @db.VarChar(64)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  order       Order?
+
+  @@index([guestHash, createdAt])
+  @@index([expiresAt])
+  @@map("checkout_quotes")
+}
+
+model Order {
+  customerId         String?             @map("customer_id") @db.Uuid
+  customer           Customer?           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  id                 String              @id @default(uuid()) @db.Uuid
+  number             String              @unique
+  guestHash          String              @map("guest_hash") @db.VarChar(64)
+  checkoutKey        String              @unique @map("checkout_key") @db.VarChar(64)
+  quoteId            String              @unique @map("quote_id") @db.Uuid
+  status             OrderStatus         @default(PENDING)
+  paymentStatus      OrderPaymentStatus  @default(UNPAID) @map("payment_status")
+  currency           String              @db.VarChar(3)
+  contact            Json
+  shippingAddress    Json                @map("shipping_address")
+  billingAddress     Json                @map("billing_address")
+  policySnapshot     Json                @map("policy_snapshot")
+  /// All subtotal/shipping/total amounts are TTC. Tax is included, never added again.
+  subtotalAmount     Int                 @map("subtotal_amount")
+  shippingAmount     Int                 @map("shipping_amount")
+  shippingTaxAmount  Int                 @map("shipping_tax_amount")
+  shippingTaxRateBps Int                 @map("shipping_tax_rate_bps")
+  taxAmount          Int                 @map("tax_amount")
+  totalAmount        Int                 @map("total_amount")
+  refundedAmount     Int                 @default(0) @map("refunded_amount")
+  expiresAt          DateTime            @map("expires_at") @db.Timestamptz(3)
+  paidAt             DateTime?           @map("paid_at") @db.Timestamptz(3)
+  cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz(3)
+  reviewReason       String?             @map("review_reason")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  quote              CheckoutQuote       @relation(fields: [quoteId], references: [id], onDelete: Restrict)
+  items              OrderItem[]
+  paymentAttempt     PaymentAttempt?
+  fulfillment        FulfillmentRequest?
+  events             OrderEvent[]
+
+  @@index([guestHash, createdAt])
+  @@index([customerId, createdAt])
+  @@index([status, expiresAt])
+  @@index([paymentStatus, updatedAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                String                 @id @default(uuid()) @db.Uuid
+  orderId           String                 @map("order_id") @db.Uuid
+  saleListingId     String                 @map("sale_listing_id") @db.Uuid
+  merchandiseItemId String                 @map("merchandise_item_id") @db.Uuid
+  title             String
+  quantity          Int
+  unitPriceAmount   Int                    @map("unit_price_amount")
+  currency          String                 @db.VarChar(3)
+  taxInclusion      TaxInclusion           @default(INCLUDED) @map("tax_inclusion")
+  taxRateBps        Int                    @map("tax_rate_bps")
+  taxAmount         Int                    @map("tax_amount")
+  totalAmount       Int                    @map("total_amount")
+  order             Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  saleListing       SaleListing            @relation(fields: [saleListingId], references: [id], onDelete: Restrict)
+  merchandiseItem   MerchandiseItem        @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+  reservations      InventoryReservation[]
+
+  @@unique([orderId, saleListingId])
+  @@index([saleListingId])
+  @@index([merchandiseItemId])
+  @@map("order_items")
+}
+
+model InventoryReservation {
+  gachaReward       GachaReward?
+  gachaPrizeId      String?            @map("gacha_prize_id") @db.Uuid
+  gachaPullId       String?            @unique @map("gacha_pull_id") @db.Uuid
+  gachaPrize        GachaPrize?        @relation(fields: [gachaPrizeId], references: [id], onDelete: Restrict)
+  gachaPull         GachaPull?         @relation(fields: [gachaPullId], references: [id], onDelete: Restrict)
+  id                String             @id @default(uuid()) @db.Uuid
+  orderItemId       String?            @map("order_item_id") @db.Uuid
+  merchandiseItemId String             @map("merchandise_item_id") @db.Uuid
+  storageLocationId String             @map("storage_location_id") @db.Uuid
+  quantity          Int
+  status            ReservationStatus  @default(HELD)
+  expiresAt         DateTime?          @map("expires_at") @db.Timestamptz(3)
+  movementId        String?            @unique @map("movement_id") @db.Uuid
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  orderItem         OrderItem?         @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  merchandiseItem   MerchandiseItem    @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+  storageLocation   StorageLocation    @relation(fields: [storageLocationId], references: [id], onDelete: Restrict)
+  movement          InventoryMovement? @relation(fields: [movementId], references: [id], onDelete: Restrict)
+
+  @@unique([orderItemId, storageLocationId])
+  @@index([gachaPrizeId, status, gachaPullId])
+  @@index([merchandiseItemId, storageLocationId, status, expiresAt])
+  @@index([status, expiresAt])
+  @@index([storageLocationId])
+  @@map("inventory_reservations")
+}
+
+model PaymentAttempt {
+  id                String               @id @default(uuid()) @db.Uuid
+  orderId           String               @unique @map("order_id") @db.Uuid
+  provider          String               @default("STRIPE")
+  providerSessionId String?              @unique @map("provider_session_id")
+  paymentIntentId   String?              @unique @map("payment_intent_id")
+  status            PaymentAttemptStatus @default(CREATED)
+  amount            Int
+  currency          String               @db.VarChar(3)
+  checkoutUrl       String?              @map("checkout_url")
+  refundId          String?              @unique @map("refund_id")
+  refundRequestedAt DateTime?            @map("refund_requested_at") @db.Timestamptz(3)
+  lastReconciledAt  DateTime?            @map("last_reconciled_at") @db.Timestamptz(3)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  order             Order                @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  events            PaymentEvent[]
+
+  @@index([status, updatedAt])
+  @@map("payment_attempts")
+}
+
+model PaymentEvent {
+  amount      Int
+  currency    String         @db.VarChar(3)
+  id          String         @id @default(uuid()) @db.Uuid
+  provider    String
+  eventId     String         @map("event_id")
+  attemptId   String         @map("attempt_id") @db.Uuid
+  type        String
+  fingerprint String         @db.VarChar(64)
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  attempt     PaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, eventId])
+  @@index([attemptId])
+  @@map("payment_events")
+}
+
+/// Generic customer delivery request; consolidation Shipment retains its JP/transit role.
+model FulfillmentRequest {
+  rewards         GachaReward[]
+  id              String               @id @default(uuid()) @db.Uuid
+  origin          FulfillmentOrigin
+  originReference String               @map("origin_reference")
+  orderId         String?              @unique @map("order_id") @db.Uuid
+  address         Json
+  status          FulfillmentStatus    @default(READY)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  order           Order?               @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  shipment        FulfillmentShipment?
+
+  @@unique([origin, originReference])
+  @@map("fulfillment_requests")
+}
+
+model FulfillmentShipment {
+  id             String             @id @default(uuid()) @db.Uuid
+  requestId      String             @unique @map("request_id") @db.Uuid
+  carrier        String
+  trackingNumber String             @map("tracking_number")
+  shippedAt      DateTime           @default(now()) @map("shipped_at") @db.Timestamptz(3)
+  deliveredAt    DateTime?          @map("delivered_at") @db.Timestamptz(3)
+  request        FulfillmentRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+
+  @@map("fulfillment_shipments")
+}
+
+model OrderEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  orderId     String   @map("order_id") @db.Uuid
+  type        String
+  actorUserId String?  @map("actor_user_id")
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  actorUser User? @relation(fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([actorUserId])
+  @@index([orderId, createdAt])
+  @@map("order_events")
+}
+
 // Better Auth core schema. Membership is explicitly provisioned, never accepted from signup input.
 model User {
-  id            String              @id
-  name          String
-  email         String              @unique
-  emailVerified Boolean             @default(false) @map("email_verified")
-  image         String?
-  isInternal    Boolean             @default(false) @map("is_internal")
-  active        Boolean             @default(true)
-  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
-  sessions      Session[]
-  accounts      Account[]
-  movements     InventoryMovement[]
+  gachaAuthorizations    GachaAuthorization[]
+  gachaConfigurations    GachaConfiguration[]
+  gachaPulls             GachaPull[]
+  gachaEvents            GachaEvent[]
+  orderEvents            OrderEvent[]
+  marketplaceListings    MarketplaceListing[]
+  id                     String                  @id
+  name                   String
+  email                  String                  @unique
+  emailVerified          Boolean                 @default(false) @map("email_verified")
+  image                  String?
+  isInternal             Boolean                 @default(false) @map("is_internal")
+  active                 Boolean                 @default(true)
+  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  sessions               Session[]
+  accounts               Account[]
+  movements              InventoryMovement[]
+  purchases              Purchase[]
+  shipments              Shipment[]
+  landedCostCalculations LandedCostCalculation[]
 
   @@map("users")
 }
@@ -419,4 +951,296 @@ model Verification {
 
   @@index([identifier])
   @@map("verifications")
+}
+
+enum GachaPullStatus {
+  RESERVED
+  CONSUMED
+  CANCELLED
+}
+
+enum CustomerStatus {
+  ACTIVE
+  DISABLED
+  PENDING_VERIFICATION
+}
+
+model Customer {
+  gachaPulls          GachaPull[]
+  gachaRewards        GachaReward[]
+  gachaAuthorizations GachaAuthorization[]
+  gachaEvents         GachaEvent[]
+  id                  String               @id @default(uuid()) @db.Uuid
+  email               String               @unique
+  passwordHash        String               @map("password_hash")
+  displayName         String               @default("") @map("display_name")
+  lastName            String               @default("") @map("last_name")
+  emailVerifiedAt     DateTime?            @map("email_verified_at") @db.Timestamptz(3)
+  status              CustomerStatus       @default(PENDING_VERIFICATION)
+  commerceKey         String               @unique @map("commerce_key")
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  lastLoginAt         DateTime?            @map("last_login_at") @db.Timestamptz(3)
+  sessions            CustomerSession[]
+  tokens              CustomerToken[]
+  addresses           CustomerAddress[]
+  events              CustomerEvent[]
+  orders              Order[]
+
+  @@map("customers")
+}
+
+model CustomerSession {
+  id         String   @id @default(uuid()) @db.Uuid
+  customerId String   @map("customer_id") @db.Uuid
+  tokenHash  String   @unique @map("token_hash") @db.VarChar(64)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+  @@map("customer_sessions")
+}
+
+model CustomerToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  customerId String   @map("customer_id") @db.Uuid
+  tokenHash  String   @unique @map("token_hash") @db.VarChar(64)
+  purpose    String
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId, purpose])
+  @@map("customer_tokens")
+}
+
+model CustomerAddress {
+  id              String   @id @default(uuid()) @db.Uuid
+  customerId      String   @map("customer_id") @db.Uuid
+  label           String
+  name            String
+  line1           String
+  line2           String   @default("")
+  postalCode      String   @map("postal_code")
+  city            String
+  country         String   @db.VarChar(2)
+  phone           String   @default("")
+  defaultShipping Boolean  @default(false) @map("default_shipping")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+  @@map("customer_addresses")
+}
+
+model CustomerEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  customerId  String   @map("customer_id") @db.Uuid
+  type        String
+  actorUserId String?  @map("actor_user_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId, createdAt])
+  @@map("customer_events")
+}
+
+model CustomerRateLimit {
+  key       String   @id
+  count     Int
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@index([expiresAt])
+  @@map("customer_rate_limits")
+}
+
+model GachaBanner {
+  customerEnabled        Boolean              @default(false) @map("customer_enabled")
+  authorizations         GachaAuthorization[]
+  id                     String               @id @default(uuid()) @db.Uuid
+  name                   String
+  slug                   String               @unique
+  description            String               @default("")
+  startsAt               DateTime?            @map("starts_at") @db.Timestamptz(3)
+  endsAt                 DateTime?            @map("ends_at") @db.Timestamptz(3)
+  active                 Boolean              @default(false)
+  paidEnabled            Boolean              @default(false) @map("paid_enabled")
+  pullPriceAmount        Int?                 @map("pull_price_amount")
+  currency               String               @default("EUR") @db.VarChar(3)
+  terms                  String
+  termsVersion           String               @map("terms_version")
+  currentConfigurationId String?              @unique @map("current_configuration_id") @db.Uuid
+  currentConfiguration   GachaConfiguration?  @relation("CurrentGacha", fields: [currentConfigurationId], references: [id], onDelete: Restrict)
+  configurations         GachaConfiguration[] @relation("BannerConfigurations")
+  prizes                 GachaPrize[]
+  pulls                  GachaPull[]
+  events                 GachaEvent[]
+  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([active, startsAt, endsAt])
+  @@map("gacha_banners")
+}
+
+model GachaConfiguration {
+  id          String       @id @default(uuid()) @db.Uuid
+  bannerId    String       @map("banner_id") @db.Uuid
+  version     Int
+  totalWeight Int          @map("total_weight")
+  snapshot    Json
+  digest      String       @db.VarChar(64)
+  actorUserId String       @map("actor_user_id")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  banner      GachaBanner  @relation("BannerConfigurations", fields: [bannerId], references: [id], onDelete: Restrict)
+  currentFor  GachaBanner? @relation("CurrentGacha")
+  actorUser   User         @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  prizes      GachaPrize[]
+  pulls       GachaPull[]
+
+  @@unique([bannerId, version])
+  @@map("gacha_configurations")
+}
+
+model GachaPrize {
+  rewards           GachaReward[]
+  id                String                 @id @default(uuid()) @db.Uuid
+  bannerId          String                 @map("banner_id") @db.Uuid
+  configurationId   String                 @map("configuration_id") @db.Uuid
+  merchandiseItemId String                 @map("merchandise_item_id") @db.Uuid
+  tier              String
+  weight            Int
+  allocation        Int
+  displayName       String                 @map("display_name")
+  description       String                 @default("")
+  displayOrder      Int                    @map("display_order")
+  banner            GachaBanner            @relation(fields: [bannerId], references: [id], onDelete: Restrict)
+  configuration     GachaConfiguration     @relation(fields: [configurationId], references: [id], onDelete: Restrict)
+  merchandiseItem   MerchandiseItem        @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+  reservations      InventoryReservation[]
+  pulls             GachaPull[]
+
+  @@unique([configurationId, merchandiseItemId])
+  @@unique([configurationId, displayOrder])
+  @@index([bannerId])
+  @@index([merchandiseItemId])
+  @@map("gacha_prizes")
+}
+
+model GachaPull {
+  customerId         String?               @map("customer_id") @db.Uuid
+  requestKey         String?               @map("request_key") @db.Uuid
+  authorizationId    String?               @map("authorization_id") @db.Uuid
+  customer           Customer?             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  authorization      GachaAuthorization?   @relation(fields: [authorizationId], references: [id], onDelete: Restrict)
+  reward             GachaReward?
+  id                 String                @id @default(uuid()) @db.Uuid
+  bannerId           String                @map("banner_id") @db.Uuid
+  configurationId    String                @map("configuration_id") @db.Uuid
+  prizeId            String                @map("prize_id") @db.Uuid
+  customerReference  String                @map("customer_reference")
+  operationKey       String                @unique @map("operation_key") @db.Uuid
+  requestFingerprint String                @map("request_fingerprint") @db.VarChar(64)
+  randomTicket       Int                   @map("random_ticket")
+  randomAlgorithm    String                @map("random_algorithm")
+  status             GachaPullStatus       @default(RESERVED)
+  audit              Json
+  actorUserId        String?               @map("actor_user_id")
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  banner             GachaBanner           @relation(fields: [bannerId], references: [id], onDelete: Restrict)
+  configuration      GachaConfiguration    @relation(fields: [configurationId], references: [id], onDelete: Restrict)
+  prize              GachaPrize            @relation(fields: [prizeId], references: [id], onDelete: Restrict)
+  actorUser          User?                 @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  reservation        InventoryReservation?
+  events             GachaEvent[]
+
+  @@unique([customerId, requestKey])
+  @@index([customerId, createdAt])
+  @@index([authorizationId])
+  @@index([bannerId, createdAt])
+  @@index([configurationId])
+  @@index([prizeId])
+  @@index([customerReference])
+  @@map("gacha_pulls")
+}
+
+model GachaEvent {
+  customerId  String?     @map("customer_id") @db.Uuid
+  customer    Customer?   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  id          String      @id @default(uuid()) @db.Uuid
+  bannerId    String      @map("banner_id") @db.Uuid
+  pullId      String?     @map("pull_id") @db.Uuid
+  type        String
+  note        String
+  actorUserId String?     @map("actor_user_id")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  banner      GachaBanner @relation(fields: [bannerId], references: [id], onDelete: Restrict)
+  pull        GachaPull?  @relation(fields: [pullId], references: [id], onDelete: Restrict)
+  actorUser   User?       @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([bannerId, createdAt])
+  @@index([pullId])
+  @@map("gacha_events")
+}
+
+// Explicit no-charge administrator authorization. No money, balance or payment inference.
+model GachaAuthorization {
+  id           String      @id @default(uuid()) @db.Uuid
+  operationKey String      @unique @map("operation_key") @db.Uuid
+  customerId   String      @map("customer_id") @db.Uuid
+  bannerId     String      @map("banner_id") @db.Uuid
+  maxPulls     Int         @map("max_pulls")
+  expiresAt    DateTime    @map("expires_at") @db.Timestamptz(3)
+  reason       String
+  actorUserId  String      @map("actor_user_id")
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  customer     Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  banner       GachaBanner @relation(fields: [bannerId], references: [id], onDelete: Restrict)
+  actorUser    User        @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  pulls        GachaPull[]
+
+  @@index([customerId, bannerId, expiresAt])
+  @@map("gacha_authorizations")
+}
+
+enum GachaRewardStatus {
+  CLAIMED
+  PREPARING
+  SHIPPED
+  DELIVERED
+  AWARDED
+  CONSUMED
+  CANCELLED
+}
+
+model GachaReward {
+  fulfillmentId     String?              @map("fulfillment_id") @db.Uuid
+  claimKey          String?              @map("claim_key") @db.Uuid
+  claimFingerprint  String?              @map("claim_fingerprint") @db.VarChar(64)
+  claimedAt         DateTime?            @map("claimed_at") @db.Timestamptz(3)
+  fulfillment       FulfillmentRequest?  @relation(fields: [fulfillmentId], references: [id], onDelete: Restrict)
+  id                String               @id @default(uuid()) @db.Uuid
+  customerId        String               @map("customer_id") @db.Uuid
+  pullId            String               @unique @map("pull_id") @db.Uuid
+  prizeId           String               @map("prize_id") @db.Uuid
+  merchandiseItemId String               @map("merchandise_item_id") @db.Uuid
+  reservationId     String               @unique @map("reservation_id") @db.Uuid
+  quantity          Int                  @default(1)
+  status            GachaRewardStatus    @default(AWARDED)
+  receipt           Json
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  customer          Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  pull              GachaPull            @relation(fields: [pullId], references: [id], onDelete: Restrict)
+  prize             GachaPrize           @relation(fields: [prizeId], references: [id], onDelete: Restrict)
+  merchandiseItem   MerchandiseItem      @relation(fields: [merchandiseItemId], references: [id], onDelete: Restrict)
+  reservation       InventoryReservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@unique([customerId, claimKey])
+  @@index([merchandiseItemId])
+  @@index([fulfillmentId])
+  @@index([status, createdAt])
+  @@index([customerId, status, createdAt])
+  @@map("gacha_rewards")
 }

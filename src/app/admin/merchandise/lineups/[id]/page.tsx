@@ -7,6 +7,7 @@ import { MediaImage } from "@/components/ui/media-image";
 import { Icon } from "@/components/ui/icon";
 import { LineupActions } from "@/components/admin/lineup-actions";
 import { ItemTable } from "@/components/admin/item-table";
+import { BulkSelection } from "@/components/admin/bulk-selection";
 import { Pagination } from "@/components/admin/pagination";
 
 export const metadata = { title: "Lineup details" };
@@ -27,8 +28,15 @@ export default async function LineupDetail({
     item: "Catalog item added. No inventory or listing was created.",
     sources: "Source links updated.",
   };
+  const created = Number(
+    typeof query.created === "string" ? query.created : "",
+  );
   const notice =
-    typeof query.notice === "string" ? notices[query.notice] : null;
+    query.notice === "bulk"
+      ? `${Number.isSafeInteger(created) && created > 0 ? created : 0} merchandise item${created === 1 ? "" : "s"} added. No inventory or listing was created.`
+      : typeof query.notice === "string"
+        ? notices[query.notice]
+        : null;
   return (
     <>
       <div className="breadcrumb">
@@ -86,14 +94,37 @@ export default async function LineupDetail({
             )}
           </div>
           <div className="detail-actions">
+            <a
+              className="button"
+              href={`/api/admin/catalog/csv?scope=lineup&lineup=${id}`}
+            >
+              Export CSV
+            </a>
             {!archived && (
-              <Link
-                className="button primary"
-                href={`/admin/merchandise/lineups/${id}/items/new`}
-              >
-                <Icon name="plus" />
-                Add item
-              </Link>
+              <>
+                <Link
+                  className="button"
+                  href={`/admin/merchandise/lineups/${id}/import`}
+                >
+                  Import CSV
+                </Link>
+                <Link className="button" href={`/admin/merchandise/import-source?lineup=${id}`}>
+                  Import from official page
+                </Link>
+                <Link
+                  className="button primary"
+                  href={`/admin/merchandise/lineups/${id}/items/bulk`}
+                >
+                  <Icon name="plus" />
+                  Add items
+                </Link>
+                <Link
+                  className="button"
+                  href={`/admin/merchandise/lineups/${id}/items/new`}
+                >
+                  Add single item
+                </Link>
+              </>
             )}
             <Link
               className="button"
@@ -138,30 +169,37 @@ export default async function LineupDetail({
             Stock includes units in transit
           </span>
         </div>
-        <ItemTable items={lineup.items} parentArchived={archived} />
-        {!lineup.items.length && (
-          <div className="empty-state">
-            <Icon name="tag" size={30} />
-            <h2>No merchandise items yet</h2>
-            <p>Add individual designs to build this release’s catalog.</p>
-            {!archived && (
-              <Link
-                className="button"
-                href={`/admin/merchandise/lineups/${id}/items/new`}
-              >
-                Add first item
-              </Link>
-            )}
-          </div>
-        )}
-        <Pagination
-          base={`/admin/merchandise/lineups/${id}`}
-          params={{ size: lineup.size }}
-          page={lineup.page}
-          pageCount={lineup.pageCount}
-          total={lineup.counts.catalogued}
-          size={lineup.size}
-        />
+        <BulkSelection
+          key={id}
+          visibleIds={lineup.items.map((item) => item.id)}
+          lineup={{ id, total: lineup.counts.catalogued }}
+          filters={{ lineup: id, archived: "true" }}
+        >
+          <ItemTable items={lineup.items} parentArchived={archived} />
+          {!lineup.items.length && (
+            <div className="empty-state">
+              <Icon name="tag" size={30} />
+              <h2>No merchandise items yet</h2>
+              <p>Add individual designs to build this release’s catalog.</p>
+              {!archived && (
+                <Link
+                  className="button"
+                  href={`/admin/merchandise/lineups/${id}/items/bulk`}
+                >
+                  Add merchandise items
+                </Link>
+              )}
+            </div>
+          )}
+          <Pagination
+            base={`/admin/merchandise/lineups/${id}`}
+            params={{ size: lineup.size }}
+            page={lineup.page}
+            pageCount={lineup.pageCount}
+            total={lineup.counts.catalogued}
+            size={lineup.size}
+          />
+        </BulkSelection>
       </section>
       <section className="panel sources-panel">
         <div className="panel-heading">

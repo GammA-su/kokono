@@ -1,0 +1,19 @@
+[Unit]
+Description=Kokoni authoritative backend
+After=network-online.target
+Wants=network-online.target
+[Service]
+User=kokoni
+WorkingDirectory=/opt/kokoni/backend/current
+EnvironmentFile=/etc/kokoni/backend.env
+ExecStartPre=/usr/bin/node --import tsx scripts/production-preflight.ts
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=50s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/kokoni/media /opt/kokoni/backend/current/.next/cache
+[Install]
+WantedBy=multi-user.target

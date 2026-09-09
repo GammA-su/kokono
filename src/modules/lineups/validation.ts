@@ -23,7 +23,7 @@ export const imageReferenceSchema = z
   )
   .nullable()
   .default(null);
-const partialDate = z
+export const partialDateSchema = z
   .string()
   .trim()
   .nullable()
@@ -93,8 +93,8 @@ export const lineupInputSchema = z
       .transform((value) => value || null)
       .nullable()
       .default(null),
-    announcedDate: partialDate,
-    releaseDate: partialDate,
+    announcedDate: partialDateSchema,
+    releaseDate: partialDateSchema,
     status: z.enum(LineupStatus),
     mainImageStorageKey: imageReferenceSchema,
     sources: sourcesSchema.default([]),

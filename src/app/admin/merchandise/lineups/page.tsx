@@ -33,6 +33,7 @@ export default async function Lineups({
           <Icon name="plus" />
           Create lineup
         </Link>
+        <Link className="button" href="/admin/merchandise/import-source">Import from official page</Link>
       </div>
       {params.notice === "deleted" && (
         <p className="alert success" role="status">

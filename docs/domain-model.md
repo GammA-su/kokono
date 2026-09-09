@@ -17,7 +17,7 @@ Franchise 1 ── N Lineup 1 ── N MerchandiseItem
 
 `PurchaseWatch` is one shared internal configuration per item, whether enabled or disabled. Disabling preserves its record. There is no coupling between its state, quantity owned, and publication. `savePurchaseWatch` is a full configuration save; send the fields to preserve when changing it.
 
-Internal SKU and item slug are globally unique. Names are intentionally nonunique. JAN is indexed but nonunique for assortments. The runtime catalog creation service accepts JAN-8 and JAN-13 numeric strings; it does not claim to verify a barcode's identity. Franchise slug is globally unique; lineup slug is unique within its franchise. A listing has its own globally unique public slug. An item's franchise is reached through its lineup, so it is not duplicated on the item.
+Internal SKU and item slug are globally unique. Bulk entry generates SKUs as a readable lineup token, a digest of the lineup ID and a per-lineup sequence, allocated while the lineup row is locked; identity never comes from the item name, and a manual SKU that already exists is rejected rather than reused. Names are intentionally nonunique. JAN is indexed but nonunique for assortments. The runtime catalog creation service accepts JAN-8 and JAN-13 numeric strings; it does not claim to verify a barcode's identity. Franchise slug is globally unique; lineup slug is unique within its franchise. A listing has its own globally unique public slug. An item's franchise is reached through its lineup, so it is not duplicated on the item.
 
 Character membership is many-to-many. A character has one primary franchise, but the item join does not prohibit cross-franchise characters, allowing collaboration merchandise. A later lineup-to-franchise join can add secondary crossover franchises while retaining the primary navigation hierarchy.
 
@@ -25,7 +25,7 @@ Character membership is many-to-many. A character has one primary franchise, but
 
 ## Partial dates
 
-Both announced and release dates use a PostgreSQL `DATE` plus nullable `DatePrecision`:
+Lineup announced/release dates and the merchandise item's own release date all use a PostgreSQL `DATE` plus nullable `DatePrecision`:
 
 | Source | Stored date | Precision | Display |
 | --- | --- | --- | --- |
@@ -34,7 +34,11 @@ Both announced and release dates use a PostgreSQL `DATE` plus nullable `DatePrec
 | 14 November 2026 | 2026-11-14 | DAY | 14 November 2026 |
 | Unknown | NULL | NULL | Unknown/blank, chosen by future UI |
 
-The first day/month is a storage anchor, **not an asserted release day**. PostgreSQL checks enforce paired nullability and normalized anchors. Use `parsePartialDate("2026-11")` to build the pair and `formatPartialDate(date, precision)` to render it. The formatter uses UTC so machine timezone cannot change the displayed calendar date. Input uses the strict forms `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` and rejects invalid calendar dates.
+The first day/month is a storage anchor, **not an asserted release day**. PostgreSQL checks enforce paired nullability and normalized anchors on lineups and merchandise items alike.
+
+`MerchandiseItem.releaseDate` exists because items in one lineup can ship on different dates and because bulk entry must allow a per-row override of the inherited lineup date. It is independent of the lineup's date: a null item date means the item has no separately recorded release, not that it inherits at read time. Bulk entry writes the inherited value onto each row explicitly, so what is stored is what was reviewed.
+
+Use `parsePartialDate("2026-11")` to build the pair and `formatPartialDate(date, precision)` to render it. The formatter uses UTC so machine timezone cannot change the displayed calendar date. Input uses the strict forms `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` and rejects invalid calendar dates.
 
 Always interpret date sorting and range filtering with precision. For a future date-overlap search, a YEAR represents the full calendar year and a MONTH the full month; comparing only the anchor against a narrow day range would lose imprecise releases. No date filtering UI is implemented yet.
 
@@ -67,10 +71,10 @@ Incoming operations reject an inactive destination or ancestor. Existing stock c
 
 | Movement | Delta | Locations |
 | --- | --- | --- |
-| PURCHASE, GACHA | Positive | Destination only |
+| PURCHASE | Positive | Destination only |
 | SALE, DAMAGED, LOST | Negative | Source only |
 | TRANSFER | Positive units moved | Distinct source and destination |
-| RETURN, ADJUSTMENT, GIFT, OTHER | Signed | Positive: destination only; negative: source only |
+| RETURN, ADJUSTMENT, GIFT, GACHA, OTHER | Signed | Positive: destination only; negative: source only |
 
 `RETURN` supports customer returns into stock and returns to a supplier out of stock. Record the context in notes/reference fields. `DAMAGED` removes units from managed stock; retaining damaged units as separately sellable goods will require the deferred condition/lot model. `ADJUSTMENT` requires an explanation. All deltas are nonzero integers.
 
@@ -82,7 +86,7 @@ Japan → in transit → France is two transfers using the same item ID. Custome
 
 1. Check internal membership for a human actor.
 2. Acquire an operation-key advisory lock, then return an exact prior result or reject changed input.
-3. Lock the merchandise row before touching any balances. This serializes operations for that item, including creation of previously missing balances.
+3. Acquire a shared hierarchy advisory lock to serialize against location edits, then lock the merchandise row before touching any balances. This serializes operations for that item, including creation of previously missing balances.
 4. Validate locations and destination availability.
 5. Decrement source conditionally on sufficient quantity and increment/upsert destination.
 6. Append the movement and commit. Any failure rolls back both balance effects and the ledger insertion.
@@ -104,6 +108,8 @@ Purchase costs, private notes, watch settings, movement history, and source/imag
 There are no public storefront routes or caches yet. Internal merchandise routes are authenticated and invalidate their admin layout after mutations. When adding public routes, use the public query functions and invalidate relevant page/data caches on catalog, image approval, publication, location eligibility and stock changes. Recheck stock transactionally when orders are introduced; a browsing availability result is never a reservation.
 
 Archiving preserves listing and watch configuration as well as stock/history. It hides the item from public queries, including direct slug lookups. The internal UI should expose archived stock for reconciliation. Restoring an archive would restore its previous publication eligibility, so a future restore flow should make that behavior explicit.
+
+Bulk entry creates each item with its character relations, one initial `ItemSource`, one `PRIMARY` `ItemImage` and an optional `PurchaseWatch` inside a single transaction. Weak duplicate signals (JAN, Japanese name, normalized English name, and matching characters/category/MSRP) are reported for review and never silently reject a row; only unique-constraint conflicts such as an existing internal SKU are refused.
 
 In the lineup admin, Delete permanently removes only an empty lineup and its sources. Any lineup containing merchandise is archived instead, after exact-name confirmation. Its items and stock remain visible internally; an Include archived filter and a clearly described Restore action make archival reversible. Duplicating creates only release metadata and source links, resets checked timestamps, and opens the new copy for editing. It does not duplicate merchandise, stock, watches, or listings.
 

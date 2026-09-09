@@ -1,0 +1,354 @@
+{
+  "scope": "Synthetic local domain/DB load with history; no external provider calls. Not HTTP/TLS capacity or an SLA benchmark.",
+  "history_fixture": {
+    "items": 50000,
+    "lineups": 5000,
+    "movements": 500000,
+    "balances": 150000,
+    "reservations": 3000,
+    "caveat": "Synthetic local domain/DB load with history; no external provider calls. Not HTTP/TLS capacity or an SLA benchmark.",
+    "catalog_page_ms": 92,
+    "catalog_search_ms": 458,
+    "catalog_deep_page_ms": 118,
+    "public_page_ms": 2396,
+    "public_page_warm_ms": 2489,
+    "public_detail_ms": 44,
+    "dashboard_ms": 9326
+  },
+  "concurrent_load": {
+    "concurrency": 12,
+    "poolSize": 10,
+    "initialOrders": 1000,
+    "initialReservations": 3000,
+    "initialRewards": 400,
+    "evidenceScope": "Real domain/DB mixed load, no provider calls. HTTP/proxy/TLS capacity is separate.",
+    "samples": [
+      {
+        "operation": "popular-odds",
+        "ms": 77
+      },
+      {
+        "operation": "popular-odds",
+        "ms": 32
+      },
+      {
+        "operation": "cart",
+        "ms": 150
+      },
+      {
+        "operation": "detail",
+        "ms": 155
+      },
+      {
+        "operation": "pull",
+        "ms": 166
+      },
+      {
+        "operation": "login",
+        "ms": 180
+      },
+      {
+        "operation": "cart",
+        "ms": 210
+      },
+      {
+        "operation": "detail",
+        "ms": 214
+      },
+      {
+        "operation": "detail",
+        "ms": 64
+      },
+      {
+        "operation": "pull",
+        "ms": 125
+      },
+      {
+        "operation": "cart",
+        "ms": 76
+      },
+      {
+        "operation": "popular-odds",
+        "ms": 40
+      },
+      {
+        "operation": "login",
+        "ms": 254
+      },
+      {
+        "operation": "pull",
+        "ms": 133
+      },
+      {
+        "operation": "cart",
+        "ms": 127
+      },
+      {
+        "operation": "detail",
+        "ms": 139
+      },
+      {
+        "operation": "login",
+        "ms": 142
+      },
+      {
+        "operation": "popular-odds",
+        "ms": 46
+      },
+      {
+        "operation": "login",
+        "ms": 279
+      },
+      {
+        "operation": "quote-reserve-cancel",
+        "ms": 463
+      },
+      {
+        "operation": "quote-reserve-cancel",
+        "ms": 281
+      },
+      {
+        "operation": "pull",
+        "ms": 170
+      },
+      {
+        "operation": "detail",
+        "ms": 129
+      },
+      {
+        "operation": "cart",
+        "ms": 122
+      },
+      {
+        "operation": "quote-reserve-cancel",
+        "ms": 586
+      },
+      {
+        "operation": "popular-odds",
+        "ms": 41
+      },
+      {
+        "operation": "cart",
+        "ms": 95
+      },
+      {
+        "operation": "detail",
+        "ms": 110
+      },
+      {
+        "operation": "pull",
+        "ms": 155
+      },
+      {
+        "operation": "login",
+        "ms": 257
+      },
+      {
+        "operation": "popular-odds",
+        "ms": 38
+      },
+      {
+        "operation": "quote-reserve-cancel",
+        "ms": 413
+      },
+      {
+        "operation": "detail",
+        "ms": 111
+      },
+      {
+        "operation": "pull",
+        "ms": 218
+      },
+      {
+        "operation": "login",
+        "ms": 274
+      },
+      {
+        "operation": "quote-reserve-cancel",
+        "ms": 507
+      },
+      {
+        "operation": "cart",
+        "ms": 172
+      },
+      {
+        "operation": "popular-odds",
+        "ms": 79
+      },
+      {
+        "operation": "quote-reserve-cancel",
+        "ms": 493
+      },
+      {
+        "operation": "pull",
+        "ms": 310
+      },
+      {
+        "operation": "login",
+        "ms": 436
+      },
+      {
+        "operation": "quote-reserve-cancel",
+        "ms": 446
+      },
+      {
+        "operation": "detail",
+        "ms": 373
+      },
+      {
+        "operation": "cart",
+        "ms": 219
+      },
+      {
+        "operation": "popular-odds",
+        "ms": 55
+      },
+      {
+        "operation": "login",
+        "ms": 390
+      },
+      {
+        "operation": "detail",
+        "ms": 342
+      },
+      {
+        "operation": "quote-reserve-cancel",
+        "ms": 725
+      },
+      {
+        "operation": "pull",
+        "ms": 621
+      },
+      {
+        "operation": "cart",
+        "ms": 233
+      },
+      {
+        "operation": "popular-odds",
+        "ms": 215
+      },
+      {
+        "operation": "login",
+        "ms": 641
+      },
+      {
+        "operation": "quote-reserve-cancel",
+        "ms": 596
+      },
+      {
+        "operation": "list",
+        "ms": 4406
+      },
+      {
+        "operation": "detail",
+        "ms": 1679
+      },
+      {
+        "operation": "list",
+        "ms": 4330
+      },
+      {
+        "operation": "list",
+        "ms": 4500
+      },
+      {
+        "operation": "pull",
+        "ms": 1989
+      },
+      {
+        "operation": "popular-odds",
+        "ms": 71
+      },
+      {
+        "operation": "cart",
+        "ms": 170
+      },
+      {
+        "operation": "pull",
+        "ms": 96
+      },
+      {
+        "operation": "list",
+        "ms": 4267
+      },
+      {
+        "operation": "list",
+        "ms": 4500
+      },
+      {
+        "operation": "list",
+        "ms": 3989
+      },
+      {
+        "operation": "login",
+        "ms": 306
+      },
+      {
+        "operation": "quote-reserve-cancel",
+        "ms": 316
+      },
+      {
+        "operation": "list",
+        "ms": 4385
+      },
+      {
+        "operation": "list",
+        "ms": 3973
+      },
+      {
+        "operation": "list",
+        "ms": 3917
+      },
+      {
+        "operation": "list",
+        "ms": 3402
+      }
+    ],
+    "inventoryMismatchCount": 0,
+    "poolUsage": {
+      "maxConnections": 10,
+      "maxActive": 10,
+      "maxWaiting": 2,
+      "samples": 109
+    }
+  },
+  "base_fixture_timings": {
+    "catalog_page_ms": 108,
+    "catalog_search_ms": 409,
+    "catalog_deep_page_ms": 131,
+    "public_page_ms": 2296,
+    "public_page_warm_ms": 2171,
+    "public_facets_ms": 4116,
+    "public_detail_ms": 71,
+    "dashboard_ms": 9149
+  },
+  "restore": {
+    "databaseRestored": true,
+    "mediaRestored": true,
+    "runtimeRoleNonOwner": true,
+    "createTableDenied": true,
+    "ledgerMutationTested": true,
+    "ledgerRewriteDenied": true,
+    "orders": 1,
+    "rewards": 1,
+    "backendAndFrontendStarted": true,
+    "httpMerchandiseImagesOrdersRewards": true,
+    "scope": "Disposable local Docker database, fixture media, HTTP loopback; not offsite/PITR or production restore evidence."
+  },
+  "tests": {
+    "backend": 338,
+    "backend_files": 33,
+    "frontend": 31,
+    "final_pagination_configuration": 14,
+    "builds": "both passed",
+    "backend_lint": "passed",
+    "storefront_http": "passed",
+    "customer_gacha_browser": "passed"
+  },
+  "migration_state": {
+    "scope": "local development read-only inspection",
+    "applied_checksums_matching": 16,
+    "pending": "20260913120000_audit_query_indexes"
+  },
+  "external_verification": "Production DNS/TLS, external Resend/Stripe delivery, hosting and off-site restore not verified."
+}

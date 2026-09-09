@@ -1,3 +1,4 @@
+import { makePublicationReady } from "./publication-fixture";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import { createDatabaseClient } from "../src/db/client";
@@ -236,6 +237,7 @@ describe("lineup forms and source management", () => {
         publishedAt: new Date(),
       },
     });
+    await makePublicationReady(db, merch.id);
     expect(await service.remove(lineup.id, lineup.name)).toBe("archived");
     expect((await queries.detail(lineup.id))?.counts.stock).toBe(5);
     expect(

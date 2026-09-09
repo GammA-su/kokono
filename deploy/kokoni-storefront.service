@@ -1,0 +1,17 @@
+[Unit]
+Description=Kokoni public Node SSR website
+After=network-online.target kokoni-backend.service
+Wants=network-online.target
+[Service]
+User=kokoni
+WorkingDirectory=/opt/kokoni/storefront/current
+EnvironmentFile=/etc/kokoni/storefront.env
+ExecStart=/usr/bin/node server.mjs --production
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=50s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+[Install]
+WantedBy=multi-user.target

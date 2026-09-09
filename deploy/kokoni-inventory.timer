@@ -1,0 +1,8 @@
+[Unit]
+Description=Kokoni inventory ledger discrepancy detection
+[Timer]
+OnCalendar=*-*-* 03:10:00 UTC
+Persistent=true
+Unit=kokoni-job@inventory-reconcile.service
+[Install]
+WantedBy=timers.target

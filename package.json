@@ -14,6 +14,7 @@
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
     "test:admin-http": "tsx --env-file=.env scripts/verify-admin-http.ts",
+    "test:storefront-http": "tsx --env-file=.env scripts/verify-storefront-http.ts",
     "db:format": "prisma format",
     "db:validate": "prisma validate",
     "db:generate": "prisma generate",
@@ -21,7 +22,24 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:up": "docker compose up -d --wait",
-    "auth:provision": "tsx --env-file=.env scripts/provision-internal-user.ts"
+    "auth:provision": "tsx --env-file=.env scripts/provision-internal-user.ts",
+    "commerce:maintenance": "tsx --env-file=.env scripts/commerce-maintenance.ts",
+    "customer:maintenance": "tsx --env-file=.env scripts/customer-maintenance.ts",
+    "ops:preflight": "tsx scripts/production-preflight.ts",
+    "inventory:reconcile": "tsx scripts/inventory-reconcile.ts",
+    "test:customer-browser": "tsx --env-file=.env scripts/verify-customer-http.ts",
+    "test:gacha-http": "tsx --env-file=.env scripts/verify-gacha-http.ts",
+    "test:gacha-browser": "tsx --env-file=.env scripts/verify-gacha-http.ts --browser",
+    "test:customer-gacha-browser": "tsx --env-file=.env scripts/verify-customer-gacha-http.ts",
+    "ops:status": "tsx --env-file=.env scripts/ops-status.ts",
+    "ops:roles": "tsx --env-file=.env scripts/verify-database-roles.ts",
+    "media:review": "tsx --env-file=.env scripts/media-review.ts",
+    "test:customer-email": "tsx --env-file=.env scripts/verify-customer-email.ts",
+    "stripe:fixture": "tsx --env-file=.env scripts/stripe-test-fixture.ts",
+    "stripe:qualify": "tsx --env-file=.env scripts/verify-stripe-test.ts",
+    "stripe:pay": "tsx --env-file=.env scripts/stripe-pay-hosted.ts",
+    "stripe:qualify2": "tsx --env-file=.env scripts/verify-stripe-test-stage2.ts",
+    "stripe:qualify3": "tsx --env-file=.env scripts/verify-stripe-test-stage3.ts"
   },
   "overrides": {
     "@prisma/config": {
@@ -37,10 +55,13 @@
     "better-auth": "1.7.3",
     "dotenv": "17.4.2",
     "next": "16.3.4",
+    "parse5": "8.0.1",
     "pg": "8.23.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "server-only": "0.0.1",
+    "sharp": "0.35.4",
+    "stripe": "^22.6.1",
     "zod": "4.5.4"
   },
   "devDependencies": {

@@ -1,6 +1,8 @@
 # Kokono merchandise domain
 
-Internal Japanese anime merchandise catalog, location-aware inventory, and independent public sale listings. The application includes the database/domain foundation and a responsive merchandise admin interface focused on managing lineups. Public storefront pages are deferred.
+Internal Japanese anime merchandise catalog, location-aware inventory, and independent public sale listings. The backend includes catalog, sourcing, inventory, commerce, customer accounts and gacha services. The separate kokoniv2 website consumes its public and authenticated customer APIs.
+
+Current operational assessment: [production readiness](docs/production-readiness.md), [environment configuration](docs/environment.md), [deployment](docs/deployment.md), and [runbooks](docs/runbooks.md). These supersede historical phase limitations below; live commerce is currently test-only.
 
 ## Stack and structure
 
@@ -15,13 +17,14 @@ prisma/migrations/                   generated schema plus PostgreSQL constraint
 prisma/seed.ts                       opt-in, repeatable development examples
 src/db/client.ts                     injectable database client for server/CLI/tests
 src/lib/                            server-only database, sessions, authorization and service wiring
-src/modules/catalog/                catalog creation, sources, images, watches, archiving, partial dates
+src/modules/catalog/                catalog creation, bulk item entry, catalog queries/presentation, duplicate detection, SKUs, partial dates
 src/modules/lineups/                paginated queries, lineup mutations, source management and form actions
 src/components/admin/               shared dense admin components and forms
 src/app/admin/merchandise/          dashboard, franchises, lineups, catalog and inventory
+src/app/admin/inventory/            inventory overview, movement forms and storage-location management
 src/modules/inventory/               atomic operations, validation, ownership totals, reconciliation
 src/modules/locations/               authorized location creation and hierarchy changes
-src/modules/publication/             listing mutations and public field allowlists
+src/modules/publication/             listing mutations, public field allowlists and fulfillable locations
 src/modules/internal/actions.ts     authenticated Next.js server actions
 src/modules/auth/                    account authorization and CLI provisioning
 tests/                              domain, authentication and database integration checks
@@ -63,9 +66,15 @@ npm run dev
 
 Open `http://localhost:3000/admin/merchandise/lineups` to manage lineups; sign-in is required. Use the origin configured in `BETTER_AUTH_URL` for login. `GET http://localhost:3000/api/health` returns `{"status":"ok"}`; this is a process health check, not a database readiness check.
 
-See [the admin interface guide](docs/admin-lineups.md) for filtering, dates, images, source management, duplication, and safe deletion.
+See [the admin interface guide](docs/admin-lineups.md) for filtering, dates, images, source management, duplication, safe deletion, and the bulk merchandise entry grid reached with **Add items** on a lineup. See [the catalog guide](docs/admin-catalog.md) for the visual merchandise catalog at `/admin/merchandise/catalog`, its status badges, stock summaries, search, filters and item detail pages.
 
 ## Development examples
+
+See [catalog CSV import/export](docs/catalog-csv.md) for lineup exports, filtered/selected catalog exports, previewed imports, duplicate decisions, supported columns and protected update policies. No stock is imported through catalog CSV.
+
+Use `/admin/watchlist` for the [private PurchaseWatch sourcing workflow](docs/admin-watchlist.md): quantity gaps, geographic stock, quick updates and external marketplace searches. Apply migration `20260907230000_watchlist_geography` with `npm run db:deploy` before starting the updated application.
+
+See [the inventory and physical storage guide](docs/admin-inventory.md) for `/admin/inventory`, hierarchical locations, receive/transfer/removal commands, acquisition valuation, and filtered movement history.
 
 The sample Re:Zero / Marine Ver. 2026 catalog is illustrative, not a verified official release. It contains Rem, Ram and Emilia, the requested category examples, and these items:
 
@@ -109,8 +118,11 @@ The initial migrations are:
 1. `20260907144108_core_domain` — enums, tables, foreign keys and indexes, including Better Auth tables.
 2. `20260907145000_domain_constraints` — partial dates, monetary values, movement shapes, nonnegative stock, immutable history, and hierarchy protection.
 3. `20260907154208_lineup_sources` — multiple lineup source records and indexes for release management.
+4. `20260907170000_item_release_date` — per-item release date, its precision enum, the matching partial-date check constraint, and its index.
 
 Create future migrations with `npm run db:migrate -- --name descriptive_name`. Review generated SQL and add SQL constraints when Prisma cannot express a rule. Apply reviewed migrations with `npm run db:deploy`. Do not substitute `prisma db push`: it does not install the history and hierarchy triggers maintained in SQL migrations.
+
+Migration `20260907213000_inventory_management` adds outgoing GACHA support and an index for latest acquisition costs. Apply it before using the inventory management interface.
 
 ```powershell
 npm run db:format
@@ -129,8 +141,12 @@ Tests require `TEST_DATABASE_URL`, insist on a database name ending in `_test`, 
 
 Use a separate migration owner and a non-owner, non-superuser application role for production. Grant only the required table operations; the application does not need schema changes, ledger UPDATE/DELETE/TRUNCATE, or user-provisioning access through a public endpoint. Database owners can bypass database protections and should not be used by public application processes. Configure production PostgreSQL backups and restore procedures before live inventory is entered.
 
+See [marketplace candidate tracking](docs/marketplace-candidates.md) for manual offers, price comparison and conversion into purchasing records. Apply migration `20260908180000_marketplace_candidates` before using this workflow.
+
+See [storefront publication](docs/storefront-publication.md) for the shared review, France availability, approved image delivery, API v1, migration and remaining website work.
+
+See [customer checkout](docs/customer-checkout.md) for Stripe test setup, France-only TTC policy, orders, reservations, dispatch/refund operations and scheduled reconciliation. The local checkout migration is applied; Stripe credentials are still required.
+
 ## Deferred work
 
-Public storefront UI, automated source checks and marketplace watching, ordering/reservations/payments, landed-cost allocation, inventory lots/conditions, and merchandise sets/variants are intentionally deferred. The new admin navigation includes supporting dashboard, franchise creation/listing, catalog, and inventory views; the full management workflow in this increment is Lineups. Images use a private local filesystem adapter that requires a persistent volume in hosted environments; an object-storage adapter can replace it later. See [the domain model](docs/domain-model.md) for extension design. No public deployment has been created.
-#   k o k o n o  
- 
+Live payments, customer accounts/recovery emails, automated source checks and marketplace watching, inventory lots/conditions, and merchandise sets/variants remain deferred. The existing public website now supports catalog browsing and guest checkout in Stripe test mode, subject to configuration. The new admin navigation includes supporting dashboard, franchise creation/listing and inventory views; the full management workflows are Lineups, bulk merchandise entry and the merchandise catalog. Catalog and Lineup pages support [bulk merchandise management](docs/bulk-management.md) through the existing domain services, including stock movements, watches, publication review, metadata changes, export and archival. Individual item details remain a read view. Bulk entry records one initial source and one primary image per item; further sources, additional images and image approval remain per-item work. Images use a private local filesystem adapter that requires a persistent volume in hosted environments; an object-storage adapter can replace it later. See [the domain model](docs/domain-model.md) for extension design. No public deployment has been created.

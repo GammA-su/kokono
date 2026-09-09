@@ -1,3 +1,4 @@
+import { makePublicationReady } from "./publication-fixture";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import { createDatabaseClient } from "../src/db/client";
@@ -46,6 +47,7 @@ async function purchase(itemId: string, locationId: string, quantity = 5, operat
 }
 
 async function listing(itemId: string) {
+  await makePublicationReady(database, itemId);
   const saved = await publication.saveListing({ merchandiseItemId: itemId, slug: `listing-${randomUUID()}`, sellingPriceAmount: 2500, sellingPriceCurrency: "EUR" });
   await publication.setPublished({ merchandiseItemId: itemId, published: true });
   return saved;
@@ -74,8 +76,8 @@ describe("independent merchandise concepts", () => {
   it("keeps MSRP, purchase cost and sale price independent", async () => {
     const { item, france } = await fixture();
     const { movement } = await purchase(item.id, france.id);
-    await listing(item.id);
-    await publication.saveListing({ merchandiseItemId: item.id, slug: `new-slug-${randomUUID()}`, sellingPriceAmount: 3000, sellingPriceCurrency: "EUR" });
+    const savedListing = await listing(item.id);
+    await publication.saveListing({ merchandiseItemId: item.id, slug: savedListing.slug, sellingPriceAmount: 3000, sellingPriceCurrency: "EUR" });
     const stored = await database.merchandiseItem.findUniqueOrThrow({ where: { id: item.id }, include: { saleListing: true } });
     expect([stored.officialMsrpAmount, stored.officialMsrpCurrency]).toEqual([1650, "JPY"]);
     expect([movement.acquisitionUnitCostAmount, movement.acquisitionUnitCostCurrency]).toEqual([1000, "JPY"]);
@@ -281,16 +283,16 @@ describe("public publication boundaries", () => {
     const { item, france } = await fixture();
     await purchase(item.id, france.id, 1);
     const saleListing = await listing(item.id);
-    expect((await getPublicListing(database, saleListing.slug))?.availability).toBe("IN_STOCK");
+    expect((await getPublicListing(database, saleListing.slug))?.availability.status).toBe("IN_STOCK");
     await applyInventoryOperation(database, { merchandiseItemId: item.id, movementType: "SALE", quantityDelta: -1, sourceLocationId: france.id, operationKey: randomUUID() }, internalId);
     expect((await database.saleListing.findUniqueOrThrow({ where: { id: saleListing.id } })).published).toBe(true);
-    expect((await getPublicListing(database, saleListing.slug))?.availability).toBe("OUT_OF_STOCK");
+    expect((await getPublicListing(database, saleListing.slug))?.availability.status).toBe("OUT_OF_STOCK");
   });
   it("publishes an unowned item and never clears its purchase watch", async () => {
     const { item } = await fixture();
     await catalog.savePurchaseWatch({ merchandiseItemId: item.id });
     const saleListing = await listing(item.id);
-    expect((await getPublicListing(database, saleListing.slug))?.availability).toBe("OUT_OF_STOCK");
+    expect((await getPublicListing(database, saleListing.slug))?.availability.status).toBe("OUT_OF_STOCK");
     expect((await database.purchaseWatch.findUniqueOrThrow({ where: { merchandiseItemId: item.id } })).enabled).toBe(true);
   });
   it("returns only public fields and approved images, including in list queries", async () => {
@@ -302,7 +304,8 @@ describe("public publication boundaries", () => {
     await catalog.addImage({ merchandiseItemId: item.id, storageKey: "public.webp", approvedForPublicUse: true, sourceUrl: "https://example.com/private-image-source" });
     const saleListing = await listing(item.id);
     const detail = await getPublicListing(database, saleListing.slug);
-    expect(detail?.images).toEqual([{ storageKey: "public.webp", caption: null, imageRole: "PRODUCT" }]);
+    expect(detail?.images).toHaveLength(1);
+    expect(detail?.images[0]).toMatchObject({ id: expect.any(String), url: expect.stringMatching(/^\/api\/storefront\/v1\/images\//), alt: "Approved product image" });
     const results = await listPublicListings(database, { take: 100 });
     expect(results.some((result) => result.slug === saleListing.slug)).toBe(true);
     for (const response of [detail, results]) {
@@ -331,14 +334,14 @@ describe("public publication boundaries", () => {
     const box = await locations.create({ code: randomUUID(), name: "Box", type: "BOX", parentId: france.id, fulfillmentEnabled: true });
     await purchase(item.id, japan.id, 3);
     const saleListing = await listing(item.id);
-    expect((await getPublicListing(database, saleListing.slug))?.availability).toBe("OUT_OF_STOCK");
+    expect((await getPublicListing(database, saleListing.slug))?.availability.status).toBe("OUT_OF_STOCK");
     await purchase(item.id, box.id, 1);
-    expect((await getPublicListing(database, saleListing.slug))?.availability).toBe("IN_STOCK");
+    expect((await getPublicListing(database, saleListing.slug))?.availability.status).toBe("IN_STOCK");
     await database.storageLocation.update({ where: { id: france.id }, data: { active: false } });
-    expect((await getPublicListing(database, saleListing.slug))?.availability).toBe("OUT_OF_STOCK");
+    expect((await getPublicListing(database, saleListing.slug))?.availability.status).toBe("OUT_OF_STOCK");
     await expect(purchase(item.id, box.id, 1)).rejects.toMatchObject({ code: "INACTIVE_LOCATION" });
     await database.storageLocation.update({ where: { id: france.id }, data: { active: true, fulfillmentEnabled: false, type: "IN_TRANSIT" } });
-    expect((await getPublicListing(database, saleListing.slug))?.availability).toBe("OUT_OF_STOCK");
+    expect((await getPublicListing(database, saleListing.slug))?.availability.status).toBe("OUT_OF_STOCK");
     expect(await getOwnedQuantity(database, item.id)).toBe(4);
   });
 });

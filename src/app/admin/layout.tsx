@@ -15,7 +15,7 @@ export default async function AdminLayout({
         Skip to content
       </a>
       <aside className="sidebar">
-        <Link href="/admin/merchandise" className="brand">
+        <Link href="/admin" className="brand">
           <span className="brand-symbol">k</span>
           <span>
             kokono<span className="brand-caption">COLLECTION MANAGEMENT</span>

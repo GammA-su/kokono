@@ -1,0 +1,87 @@
+# REFERENCE ONLY: single Linux host with nginx, backend :3000 and storefront :5173.
+# Replace domains/certificate paths, then validate with nginx -t before installing.
+# Do not point DNS here until admin access policy, TLS and rate-limit tests pass.
+worker_processes auto;
+events { worker_connections 1024; }
+http {
+  include /etc/nginx/mime.types;
+  server_tokens off;
+  # No query strings, cookies, bodies, Authorization, Referer or client IP in this log.
+  log_format kokoni '$request_id $request_method $uri $status $request_time';
+  access_log /var/log/nginx/kokoni-access.log kokoni;
+  limit_req_zone $binary_remote_addr zone=browse:10m rate=10r/s;
+  limit_req_zone $binary_remote_addr zone=auth:10m rate=2r/s;
+  limit_conn_zone $binary_remote_addr zone=connections:10m;
+  limit_req_status 429;
+  limit_conn_status 429;
+  client_max_body_size 6m;
+  client_header_timeout 10s;
+  client_body_timeout 15s;
+  keepalive_timeout 30s;
+  upstream website { server 127.0.0.1:5173; }
+  upstream backend { server 127.0.0.1:3000; }
+  server { listen 80 default_server; server_name _; return 444; }
+  server { listen 443 ssl default_server; server_name _; ssl_reject_handshake on; return 444; }
+  server {
+    listen 80;
+    server_name kokoni.example admin.kokoni.example;
+    return 308 https://$host$request_uri;
+  }
+  server {
+    listen 443 ssl;
+    server_name kokoni.example;
+    ssl_certificate /etc/kokoni/tls/fullchain.pem;
+    ssl_certificate_key /etc/kokoni/tls/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    add_header Strict-Transport-Security "max-age=86400" always;
+    limit_conn connections 20;
+    # Overwrite untrusted chains; website trusts this only from TRUSTED_PROXY_IPS.
+    proxy_set_header Host kokoni.example;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header Forwarded "";
+    proxy_set_header X-Request-ID $request_id;
+    proxy_read_timeout 50s;
+    location ~ ^/api/storefront/v1/auth/ {
+      limit_req zone=auth burst=10 nodelay;
+      client_max_body_size 16k;
+      proxy_pass http://website;
+    }
+    location / {
+      limit_req zone=browse burst=30 nodelay;
+      proxy_pass http://website;
+    }
+  }
+  server {
+    listen 443 ssl;
+    server_name admin.kokoni.example;
+    limit_conn connections 20;
+    ssl_certificate /etc/kokoni/tls/fullchain.pem;
+    ssl_certificate_key /etc/kokoni/tls/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    add_header Strict-Transport-Security "max-age=86400" always;
+    proxy_set_header Host admin.kokoni.example;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header Forwarded "";
+    proxy_set_header X-Request-ID $request_id;
+    proxy_read_timeout 50s;
+    location = /api/commerce/webhooks/stripe {
+      client_max_body_size 1m;
+      proxy_pass http://backend;
+    }
+    location ^~ /api/storefront/ {
+      limit_req zone=browse burst=30 nodelay;
+      proxy_pass http://backend;
+    }
+    location ^~ /api/commerce/v1/ {
+      limit_req zone=browse burst=30 nodelay;
+      proxy_pass http://backend;
+    }
+    location = /api/ready { limit_req zone=browse burst=5 nodelay; proxy_pass http://backend; }
+    location = /api/health { limit_req zone=browse burst=5 nodelay; proxy_pass http://backend; }
+    # Fail closed until the operator supplies a VPN/access-proxy/IP policy.
+    # Replace the following deny with the reviewed staff-access policy.
+    location / { deny all; proxy_pass http://backend; }
+  }
+}

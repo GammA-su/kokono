@@ -38,10 +38,10 @@ try {
     await database.character.upsert({ where: { id: characterIds[name] }, update: {}, create: { id: characterIds[name], franchiseId: franchise.id, name, japaneseName } });
   }
   const japan = await database.storageLocation.upsert({
-    where: { code: "JP-WAREHOUSE" }, update: {}, create: { code: "JP-WAREHOUSE", name: "Japan Warehouse", type: "JAPAN_WAREHOUSE" },
+    where: { code: "JP-WAREHOUSE" }, update: {}, create: { code: "JP-WAREHOUSE", name: "Japan Warehouse", type: "JAPAN_WAREHOUSE", countryCode: "JP" },
   });
   const france = await database.storageLocation.upsert({
-    where: { code: "FR-HOME" }, update: {}, create: { code: "FR-HOME", name: "France Home", type: "FRANCE_HOME", fulfillmentEnabled: true },
+    where: { code: "FR-HOME" }, update: {}, create: { code: "FR-HOME", name: "France Home", type: "FRANCE_HOME", countryCode: "FR", fulfillmentEnabled: true },
   });
   const shelf = await database.storageLocation.upsert({
     where: { code: "FR-HOME-SHELF-A" }, update: {}, create: { code: "FR-HOME-SHELF-A", name: "Shelf A", type: "SHELF", parentId: france.id },
