@@ -1,11 +1,10 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireInternalUser } from "@/lib/authorization";
-import { createLineupService, generatedSlug } from "./service";
+import { createLineupService } from "./service";
 import {
   lineupFromForm,
   lineupInputSchema,
@@ -15,6 +14,7 @@ import {
 import { formError, type FormState } from "./action-state";
 import { discardNewImage, saveImage } from "../media/storage";
 import { catalog } from "@/lib/services";
+import { itemFromForm } from "../catalog/item-form";
 import { DomainError } from "../shared/errors";
 
 const service = createLineupService(db, requireInternalUser);
@@ -129,24 +129,9 @@ export async function createLineupItemForm(
         "Restore the lineup and franchise before adding items.",
       );
     sourcesSchema.parse(sourcesFromForm(form));
+    // Shared with the edit action so both paths accept exactly the same fields.
     const item = await catalog.createItem(
-      {
-        lineupId: lineup.id,
-        name: form.get("name"),
-        japaneseName: form.get("japaneseName"),
-        categoryId: form.get("categoryId"),
-        internalSku: String(
-          form.get("internalSku") || `MERCH-${randomUUID().toUpperCase()}`,
-        ),
-        janCode: form.get("janCode") || null,
-        slug: generatedSlug(String(form.get("name"))),
-        description: form.get("description"),
-        characterIds: form.getAll("characterIds"),
-        officialMsrpAmount: form.get("officialMsrpAmount")
-          ? Number(form.get("officialMsrpAmount"))
-          : null,
-        officialMsrpCurrency: form.get("officialMsrpAmount") ? "JPY" : null,
-      },
+      itemFromForm(form, lineup.id),
       sourcesFromForm(form),
     );
     lineupId = item.lineupId;

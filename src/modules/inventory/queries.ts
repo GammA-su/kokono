@@ -3,7 +3,7 @@ import { latestAcquisitionSql } from "./aggregates";
 import type { Authorize } from "../auth/authorization";
 import { withInternalTransaction } from "../auth/transaction";
 import { createCatalogQueries } from "../catalog/queries";
-import { z } from "zod";
+import { searchParamsRecord } from "../shared/validation";
 
 type Acquisition = {
   itemId: string;
@@ -19,7 +19,7 @@ export function createInventoryQueries(
   const catalog = createCatalogQueries(database, authorize);
   return {
     overview: async (input: unknown = {}) => {
-      const data = z.record(z.string(), z.unknown()).parse(input);
+      const data = searchParamsRecord.parse(input);
       // Inventory includes archived merchandise and inactive storage by default.
       const result = await catalog.list({
         sort: "alphabetical",

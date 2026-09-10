@@ -39,7 +39,8 @@
     "stripe:qualify": "tsx --env-file=.env scripts/verify-stripe-test.ts",
     "stripe:pay": "tsx --env-file=.env scripts/stripe-pay-hosted.ts",
     "stripe:qualify2": "tsx --env-file=.env scripts/verify-stripe-test-stage2.ts",
-    "stripe:qualify3": "tsx --env-file=.env scripts/verify-stripe-test-stage3.ts"
+    "stripe:qualify3": "tsx --env-file=.env scripts/verify-stripe-test-stage3.ts",
+    "test:item-editing": "tsx --env-file=.env scripts/verify-item-editing-browser.ts"
   },
   "overrides": {
     "@prisma/config": {

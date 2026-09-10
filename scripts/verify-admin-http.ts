@@ -96,6 +96,7 @@ try {
           `/admin/merchandise/lineups/${existing.lineupId}`,
           `/admin/merchandise/lineups/${existing.lineupId}/items/${existing.id}/sources`,
           `/admin/merchandise/catalog/${existing.id}`,
+          `/admin/merchandise/catalog/${existing.id}/edit`,
           `/admin/merchandise/catalog/${existing.id}/movements`,
           `/admin/merchandise/catalog/${existing.id}/movements?type=PURCHASE&from=2026-01-01&to=2026-12-31`,
           `/admin/inventory/record?item=${existing.id}`,

@@ -121,6 +121,13 @@ export function ItemTable({
               <td>
                 <Link
                   className="source-link nowrap"
+                  href={`/admin/merchandise/catalog/${item.id}/edit`}
+                >
+                  Edit
+                </Link>
+                <br />
+                <Link
+                  className="source-link nowrap"
                   href={`/admin/merchandise/lineups/${item.lineupId}/items/${item.id}/sources`}
                 >
                   {item.sources.length} links

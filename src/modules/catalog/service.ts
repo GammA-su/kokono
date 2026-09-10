@@ -187,6 +187,77 @@ export function createCatalogService(
       withInternalTransaction(database, authorize, (tx) =>
         tx.franchise.create({ data: franchiseSchema.parse(input) }),
       ),
+    /**
+     * Updates one franchise. The slug is deliberately not editable here: it appears in admin
+     * URLs and prior references, and renaming a franchise is far more common than wanting to
+     * break those.
+     */
+    updateFranchise: (
+      input: unknown,
+      identity: { id: string; updatedAt: string },
+    ) =>
+      withInternalTransaction(database, authorize, async (tx) => {
+        const data = franchiseSchema.omit({ slug: true }).parse(input);
+        await tx.$queryRaw`SELECT id FROM franchises WHERE id = ${identity.id}::uuid FOR UPDATE`;
+        const current = await tx.franchise.findUnique({
+          where: { id: identity.id },
+        });
+        if (!current)
+          throw new DomainError(
+            "FRANCHISE_NOT_FOUND",
+            "This franchise no longer exists.",
+          );
+        if (current.updatedAt.toISOString() !== identity.updatedAt)
+          throw new DomainError(
+            "EDIT_CONFLICT",
+            "This franchise changed in another session. Reload before saving to avoid overwriting those changes.",
+          );
+        return tx.franchise.update({ where: { id: current.id }, data });
+      }),
+
+    /**
+     * Removes one franchise, archiving instead of deleting when lineups or characters still
+     * reference it. Archiving a franchise also hides its merchandise from the storefront, which
+     * is why the confirmation names that consequence.
+     */
+    removeFranchise: (input: unknown, confirmedName: unknown) =>
+      withInternalTransaction(database, authorize, async (tx) => {
+        const id = entityId.parse(input);
+        await tx.$queryRaw`SELECT id FROM franchises WHERE id = ${id}::uuid FOR UPDATE`;
+        const current = await tx.franchise.findUnique({
+          where: { id },
+          include: { _count: { select: { lineups: true, characters: true } } },
+        });
+        if (!current)
+          throw new DomainError(
+            "FRANCHISE_NOT_FOUND",
+            "This franchise no longer exists.",
+          );
+        if (confirmedName !== current.name)
+          throw new DomainError(
+            "CONFIRM_NAME",
+            "Enter the franchise name exactly to confirm.",
+          );
+        if (current._count.lineups > 0 || current._count.characters > 0) {
+          if (current.archivedAt) return "already-archived" as const;
+          await tx.franchise.update({
+            where: { id: current.id },
+            data: { archivedAt: new Date() },
+          });
+          return "archived" as const;
+        }
+        await tx.franchise.delete({ where: { id: current.id } });
+        return "deleted" as const;
+      }),
+
+    restoreFranchise: (input: unknown) =>
+      withInternalTransaction(database, authorize, (tx) =>
+        tx.franchise.update({
+          where: { id: entityId.parse(input) },
+          data: { archivedAt: null },
+        }),
+      ),
+
     createCharacter: (input: unknown) =>
       withInternalTransaction(database, authorize, (tx) =>
         tx.character.create({ data: characterSchema.parse(input) }),
@@ -290,6 +361,174 @@ export function createCatalogService(
         return tx.merchandiseItem.update({
           where: { id },
           data: { archivedAt: new Date() },
+        });
+      }),
+
+    /**
+     * Creates or updates one catalog item.
+     *
+     * With `identity` this is an edit, and the caller's `updatedAt` must still match the stored
+     * row: two operators editing the same item would otherwise silently overwrite each other.
+     * Character links are replaced wholesale because the form submits the complete set; sources,
+     * images, stock and publication are edited through their own screens and are untouched here.
+     */
+    saveItem: (input: unknown, identity?: { id: string; updatedAt: string }) =>
+      withInternalTransaction(database, authorize, async (tx) => {
+        const { characterIds, ...data } = itemSchema.parse(input);
+        await tx.$queryRaw`SELECT id FROM lineups WHERE id = ${data.lineupId}::uuid FOR SHARE`;
+        if (
+          !(await tx.lineup.findFirst({
+            where: {
+              id: data.lineupId,
+              archivedAt: null,
+              franchise: { archivedAt: null },
+            },
+            select: { id: true },
+          }))
+        )
+          throw new DomainError(
+            "LINEUP_UNAVAILABLE",
+            "Choose an active lineup in an active franchise.",
+          );
+        const links = [...new Set(characterIds)].map((characterId) => ({
+          characterId,
+        }));
+        if (!identity)
+          return tx.merchandiseItem.create({
+            data: { ...data, characters: { create: links } },
+          });
+        await tx.$queryRaw`SELECT id FROM merchandise_items WHERE id = ${identity.id}::uuid FOR UPDATE`;
+        const current = await tx.merchandiseItem.findUnique({
+          where: { id: identity.id },
+        });
+        if (!current)
+          throw new DomainError(
+            "ITEM_NOT_FOUND",
+            "This merchandise item no longer exists.",
+          );
+        if (current.updatedAt.toISOString() !== identity.updatedAt)
+          throw new DomainError(
+            "EDIT_CONFLICT",
+            "This item changed in another session. Reload before saving to avoid overwriting those changes.",
+          );
+        await tx.itemCharacter.deleteMany({
+          where: { merchandiseItemId: current.id },
+        });
+        return tx.merchandiseItem.update({
+          where: { id: current.id },
+          data: { ...data, characters: { create: links } },
+        });
+      }),
+
+    /**
+     * Removes one catalog item, archiving instead of deleting whenever anything depends on it.
+     *
+     * An item that has ever been stocked, sold, shipped, purchased, listed or awarded is part of
+     * recorded history: deleting it would orphan a ledger entry or an order line, so it is
+     * archived and stays queryable. Only an item with no such history is genuinely removable,
+     * and then its own sources, images and watch go with it. Typing the name is required because
+     * this is the one catalog action that can destroy data.
+     */
+    removeItem: (input: unknown, confirmedName: unknown) =>
+      withInternalTransaction(database, authorize, async (tx) => {
+        const id = entityId.parse(input);
+        await tx.$queryRaw`SELECT id FROM merchandise_items WHERE id = ${id}::uuid FOR UPDATE`;
+        const current = await tx.merchandiseItem.findUnique({
+          where: { id },
+          include: {
+            _count: {
+              select: {
+                inventoryMovements: true,
+                inventoryBalances: true,
+                orderItems: true,
+                reservations: true,
+                gachaRewards: true,
+                gachaPrizes: true,
+                purchaseItems: true,
+                shipmentItems: true,
+                marketplaceListings: true,
+                images: true,
+              },
+            },
+            saleListing: { select: { id: true } },
+          },
+        });
+        if (!current)
+          throw new DomainError(
+            "ITEM_NOT_FOUND",
+            "This merchandise item no longer exists.",
+          );
+        if (confirmedName !== current.name)
+          throw new DomainError(
+            "CONFIRM_NAME",
+            "Enter the item name exactly to confirm.",
+          );
+        const counts = current._count;
+        const history =
+          counts.inventoryMovements +
+          counts.inventoryBalances +
+          counts.orderItems +
+          counts.reservations +
+          counts.gachaRewards +
+          counts.gachaPrizes +
+          counts.purchaseItems +
+          counts.shipmentItems +
+          counts.marketplaceListings +
+          (current.saleListing ? 1 : 0);
+        if (history > 0) {
+          if (current.archivedAt) return "already-archived" as const;
+          await tx.merchandiseItem.update({
+            where: { id: current.id },
+            data: { archivedAt: new Date() },
+          });
+          return "archived" as const;
+        }
+        // Owned records only. Managed image files are removed after the transaction commits,
+        // so a rolled-back delete can never leave the catalog pointing at a missing file.
+        const images = await tx.itemImage.findMany({
+          where: { merchandiseItemId: current.id },
+          select: { storageKey: true },
+        });
+        await tx.itemCharacter.deleteMany({
+          where: { merchandiseItemId: current.id },
+        });
+        await tx.itemSource.deleteMany({
+          where: { merchandiseItemId: current.id },
+        });
+        await tx.itemImage.deleteMany({
+          where: { merchandiseItemId: current.id },
+        });
+        await tx.purchaseWatch.deleteMany({
+          where: { merchandiseItemId: current.id },
+        });
+        await tx.merchandiseItem.delete({ where: { id: current.id } });
+        return {
+          outcome: "deleted" as const,
+          storageKeys: images.map((image) => image.storageKey),
+        };
+      }),
+
+    restoreItem: (input: unknown) =>
+      withInternalTransaction(database, authorize, async (tx) => {
+        const id = entityId.parse(input);
+        const current = await tx.merchandiseItem.findUnique({
+          where: { id },
+          select: { id: true, lineup: { select: { archivedAt: true } } },
+        });
+        if (!current)
+          throw new DomainError(
+            "ITEM_NOT_FOUND",
+            "This merchandise item no longer exists.",
+          );
+        // Restoring into an archived lineup would produce an item that cannot be edited again.
+        if (current.lineup.archivedAt)
+          throw new DomainError(
+            "LINEUP_UNAVAILABLE",
+            "Restore the lineup before restoring this item.",
+          );
+        return tx.merchandiseItem.update({
+          where: { id: current.id },
+          data: { archivedAt: null },
         });
       }),
   };

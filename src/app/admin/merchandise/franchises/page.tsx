@@ -5,6 +5,7 @@ import { lineupFilterSchema } from "@/modules/lineups/queries";
 import { Pagination } from "@/components/admin/pagination";
 import { ActionForm, Field } from "@/components/admin/action-form";
 import { createFranchiseForm } from "@/modules/admin/actions";
+import { FranchiseActions } from "@/components/admin/franchise-actions";
 export const metadata = { title: "Franchises" };
 export default async function Franchises({
   searchParams,
@@ -30,10 +31,26 @@ export default async function Franchises({
     take: 25,
     include: {
       _count: {
-        select: { lineups: { where: { archivedAt: null } }, characters: true },
+        select: {
+          lineups: { where: { archivedAt: null } },
+          characters: true,
+        },
       },
+      // Deletion is only safe when nothing at all references the franchise, including
+      // lineups that are merely archived rather than active.
+      lineups: { select: { id: true }, take: 1 },
     },
   });
+  const notices: Record<string, string> = {
+    saved: "Franchise saved.",
+    archived:
+      "Franchise archived. Its merchandise is hidden from the storefront; nothing was deleted.",
+    "already-archived": "This franchise was already archived.",
+    deleted: "Franchise deleted.",
+    restored: "Franchise restored.",
+  };
+  const notice =
+    typeof params.notice === "string" ? notices[params.notice] : null;
   return (
     <>
       <div className="page-heading">
@@ -46,6 +63,11 @@ export default async function Franchises({
       {params.notice === "created" && (
         <p className="alert success">
           Franchise created. You can now add its lineups.
+        </p>
+      )}
+      {notice && (
+        <p className="alert success" role="status">
+          {notice}
         </p>
       )}
       <details className="panel form-section" style={{ marginBottom: 20 }}>
@@ -102,6 +124,20 @@ export default async function Franchises({
                     >
                       View lineups →
                     </Link>
+                    <br />
+                    <FranchiseActions
+                      franchise={{
+                        id: row.id,
+                        name: row.name,
+                        japaneseName: row.japaneseName,
+                        description: row.description,
+                        updatedAt: row.updatedAt.toISOString(),
+                        archived: !!row.archivedAt,
+                      }}
+                      hasDependents={
+                        row.lineups.length > 0 || row._count.characters > 0
+                      }
+                    />
                   </td>
                 </tr>
               ))}

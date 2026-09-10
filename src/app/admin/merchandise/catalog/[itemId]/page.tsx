@@ -12,6 +12,7 @@ import { getPublicListing } from "@/modules/publication/queries";
 import { storefrontProductUrl } from "@/modules/publication/http";
 import { db } from "@/lib/db";
 import { sourceLabels } from "@/components/admin/source-editor";
+import { ItemActions } from "@/components/admin/item-actions";
 
 export const metadata = { title: "Merchandise item" };
 
@@ -30,12 +31,49 @@ function Facts({ rows }: { rows: [string, React.ReactNode][] }) {
 
 export default async function MerchandiseItemDetail({
   params,
+  searchParams,
 }: {
   params: Promise<{ itemId: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { itemId } = await params;
+  const query = await searchParams;
+  const notices: Record<string, string> = {
+    saved: "Item saved.",
+    archived:
+      "Item archived. It is hidden from the storefront; stock and history were retained.",
+    "already-archived": "This item was already archived.",
+    restored: "Item restored.",
+  };
+  const notice =
+    typeof query.notice === "string" ? notices[query.notice] : null;
   const item = await catalogQueries.detail(itemId);
   if (!item) notFound();
+  // Anything that references this item makes deletion impossible without orphaning a record,
+  // so the delete control offers archiving instead. The server re-checks this independently.
+  const dependents = await db.merchandiseItem.findUnique({
+    where: { id: item.id },
+    select: {
+      _count: {
+        select: {
+          inventoryMovements: true,
+          inventoryBalances: true,
+          orderItems: true,
+          reservations: true,
+          gachaRewards: true,
+          gachaPrizes: true,
+          purchaseItems: true,
+          shipmentItems: true,
+          marketplaceListings: true,
+        },
+      },
+      saleListing: { select: { id: true } },
+    },
+  });
+  const hasHistory =
+    !!dependents &&
+    (Object.values(dependents._count).some((count) => count > 0) ||
+      !!dependents.saleListing);
   const release = formatPartialDate(item.release.date, item.release.precision);
   const msrp = formatOptionalMoney(
     item.officialMsrpAmount,
@@ -57,6 +95,11 @@ export default async function MerchandiseItemDetail({
         <span>/</span>
         {item.name}
       </div>
+      {notice && (
+        <p className="alert success" role="status">
+          {notice}
+        </p>
+      )}
       {item.archived && (
         <p className="alert">
           This item, its lineup or its franchise is archived. Stock and history
@@ -122,6 +165,20 @@ export default async function MerchandiseItemDetail({
               Movement history
               <span className="heading-count">{item.movementCount}</span>
             </Link>
+            <Link
+              className="button primary"
+              href={`/admin/merchandise/catalog/${item.id}/edit`}
+            >
+              Edit item
+            </Link>
+            <ItemActions
+              id={item.id}
+              name={item.name}
+              hasHistory={hasHistory}
+              // The item's own state, not its lineup's: restoring an item cannot help while
+              // its lineup is archived, and the service refuses that case anyway.
+              archived={!!item.archivedAt}
+            />
           </div>
         </div>
       </section>

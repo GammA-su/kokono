@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { searchParamsRecord } from "../shared/validation";
 import type { PrismaClient } from "../../generated/prisma/client";
 import type { Authorize } from "../auth/authorization";
 import { createCatalogQueries } from "../catalog/queries";
@@ -11,7 +11,7 @@ export function createWatchlistQueries(
   const catalog = createCatalogQueries(database, authorize);
   return {
     list: async (input: unknown = {}) => {
-      const data = z.record(z.string(), z.unknown()).parse(input);
+      const data = searchParamsRecord.parse(input);
       const sourcing = sourcingFilterSchema.parse(data);
       const result = await catalog.list(
         { archived: "true", ...data, watch: "enabled", sort: "priority" },
