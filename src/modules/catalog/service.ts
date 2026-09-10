@@ -354,6 +354,76 @@ export function createCatalogService(
       withInternalTransaction(database, authorize, (tx) =>
         tx.itemImage.create({ data: imageSchema.parse(input) }),
       ),
+
+    /**
+     * Approves or withdraws one image for public use.
+     *
+     * Withdrawing approval is refused when it would leave a published listing with no approved
+     * image, because storefront visibility requires one: the product would silently vanish from
+     * the shop with nothing in the admin explaining why.
+     */
+    setImageApproval: (input: unknown) =>
+      withInternalTransaction(database, authorize, async (tx) => {
+        const data = z
+          .object({ imageId: entityId, approved: z.boolean() })
+          .strict()
+          .parse(input);
+        const image = await tx.itemImage.findUnique({
+          where: { id: data.imageId },
+          include: { listingImages: { select: { listingId: true } } },
+        });
+        if (!image)
+          throw new DomainError("IMAGE_NOT_FOUND", "This image no longer exists.");
+        if (!data.approved && image.approvedForPublicUse)
+          for (const { listingId } of image.listingImages) {
+            const listing = await tx.saleListing.findUnique({
+              where: { id: listingId },
+              include: { images: { select: { itemImageId: true } } },
+            });
+            if (!listing?.published) continue;
+            const others = await tx.itemImage.count({
+              where: {
+                approvedForPublicUse: true,
+                id: {
+                  in: listing.images.map((row) => row.itemImageId),
+                  not: image.id,
+                },
+              },
+            });
+            if (!others)
+              throw new DomainError(
+                "LAST_PUBLIC_IMAGE",
+                "This is the only approved image on a published product. Approve another image or unpublish the product first.",
+              );
+          }
+        return tx.itemImage.update({
+          where: { id: image.id },
+          data: { approvedForPublicUse: data.approved },
+        });
+      }),
+
+    /**
+     * Deletes one image. An image selected by a sale listing is refused rather than cascaded:
+     * removing it would change what the storefront shows without the operator revisiting the
+     * listing. The stored file is reported back so the caller can unlink it after committing.
+     */
+    removeImage: (input: unknown) =>
+      withInternalTransaction(database, authorize, async (tx) => {
+        const id = entityId.parse(input);
+        const image = await tx.itemImage.findUnique({
+          where: { id },
+          include: { listingImages: { select: { listingId: true } } },
+        });
+        if (!image)
+          throw new DomainError("IMAGE_NOT_FOUND", "This image no longer exists.");
+        if (image.listingImages.length)
+          throw new DomainError(
+            "IMAGE_IN_USE",
+            "This image is selected by a store listing. Remove it from the listing before deleting it.",
+          );
+        await tx.itemImage.delete({ where: { id: image.id } });
+        return { storageKey: image.storageKey };
+      }),
     archiveItem: (input: unknown) =>
       withInternalTransaction(database, authorize, (tx) => {
         const id = entityId.parse(input);

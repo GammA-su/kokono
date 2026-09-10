@@ -8,6 +8,7 @@ import { saveItemForm } from "@/modules/catalog/actions";
 import type { SourceFormValue } from "@/modules/lineups/validation";
 import { ActionForm, Field } from "./action-form";
 import { SourceEditor } from "./source-editor";
+import { ItemCharacterField } from "./item-character-field";
 
 export type ItemFormValue = {
   id: string;
@@ -41,11 +42,15 @@ export function ItemForm({
 }: {
   lineupId: string;
   categories: { id: string; name: string }[];
-  characters: { id: string; name: string }[];
+  characters: {
+    id: string;
+    name: string;
+    japaneseName?: string | null;
+    aliases?: string[];
+  }[];
   initial?: ItemFormValue;
 }) {
   const editing = !!initial;
-  const selected = new Set(initial?.characterIds ?? []);
   return (
     <ActionForm
       action={editing ? saveItemForm : createLineupItemForm}
@@ -165,24 +170,11 @@ export function ItemForm({
             </Field>
           </div>
           <h3 style={{ marginTop: 22 }}>Characters</h3>
-          <div className="checklist">
-            {characters.map((character) => (
-              <label key={character.id}>
-                <input
-                  type="checkbox"
-                  name="characterIds"
-                  value={character.id}
-                  defaultChecked={selected.has(character.id)}
-                />
-                {character.name}
-              </label>
-            ))}
-            {!characters.length && (
-              <span className="muted small-copy">
-                No characters catalogued for this franchise yet.
-              </span>
-            )}
-          </div>
+          <ItemCharacterField
+            lineupId={lineupId}
+            options={characters}
+            initialSelected={initial?.characterIds ?? []}
+          />
         </section>
         {!editing && (
           <section className="panel form-section">

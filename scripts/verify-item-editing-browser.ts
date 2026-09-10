@@ -169,9 +169,102 @@ try {
       `name is now "${saved.name}"`,
     );
 
+    // ---------------------------------------------------------------- create a character inline
+    await page.goto(`/admin/merchandise/catalog/${editable.id}/edit`);
+    const newCharacter = `Inline character ${Date.now()}`;
+    const picker = page.locator("input.character-input");
+    assert(
+      "character_picker_replaces_checkboxes",
+      await picker.isVisible(),
+      "characters use a searchable picker, not a fixed checkbox list",
+    );
+    await picker.fill(newCharacter);
+    await page.getByRole("option", { name: /^Create/ }).click();
+    await page
+      .locator(".character-chips .chip", { hasText: newCharacter })
+      .waitFor({ timeout: 30000 });
+    const created = await db.character.findFirst({
+      where: { name: newCharacter },
+    });
+    assert(
+      "new_character_created_from_the_item_form",
+      !!created && created.franchiseId === franchise.id,
+      "created in the item's franchise without leaving the form",
+    );
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await page.waitForURL(
+      (u: URL) => u.pathname === `/admin/merchandise/catalog/${editable.id}`,
+      { timeout: 30000 },
+    );
+    assert(
+      "new_character_is_linked_on_save",
+      await db.itemCharacter
+        .count({
+          where: { merchandiseItemId: editable.id, characterId: created!.id },
+        })
+        .then((n) => n === 1),
+      "the character selected in the picker is attached to the item",
+    );
+
+    // ---------------------------------------------------------------- add and manage an image
+    await page.goto(`/admin/merchandise/catalog/${editable.id}/edit`);
+    await page.getByRole("button", { name: "Add image" }).click();
+    const openUpload = page.locator("dialog[open]");
+    await openUpload.locator('input[name="file"]').setInputFiles({
+      name: "verify.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEUlEQVQImWNwWPX/PwgzwBgAY44LoVZSKggAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    });
+    await openUpload.locator('input[name="caption"]').fill("Verified upload");
+    await openUpload.getByRole("button", { name: "Upload image" }).click();
+    await page.waitForURL(/notice=image-added/, { timeout: 30000 });
+    const image = await db.itemImage.findFirst({
+      where: { merchandiseItemId: editable.id },
+    });
+    assert(
+      "image_uploaded_from_the_edit_page",
+      !!image && image.caption === "Verified upload",
+      "the image is stored and attached to the item",
+    );
+    assert(
+      "uploaded_image_starts_private",
+      image?.approvedForPublicUse === false,
+      "approval is a deliberate separate step, not implied by uploading",
+    );
+
+    await page.getByRole("button", { name: "Approve public" }).click();
+    await page.waitForURL(/notice=image-approval/, { timeout: 30000 });
+    assert(
+      "image_can_be_approved_for_the_storefront",
+      await db.itemImage
+        .findUniqueOrThrow({ where: { id: image!.id } })
+        .then((row) => row.approvedForPublicUse),
+      "approval is reachable from the admin at last",
+    );
+
+    await page.getByRole("button", { name: "Delete" }).first().click();
+    await page.waitForURL(/notice=image-removed/, { timeout: 30000 });
+    assert(
+      "image_can_be_deleted",
+      !(await db.itemImage.findUnique({ where: { id: image!.id } })),
+      "the image row is removed",
+    );
+
     // ---------------------------------------------------------------- delete a clean item
+    await page.goto(`/admin/merchandise/catalog/${editable.id}`);
     await page.getByRole("button", { name: "Delete item" }).click();
-    await page.locator('dialog[open] input[name="confirmedName"]').fill(renamed);
+    await page
+      .locator('dialog[open] input[name="confirmedName"]')
+      .fill(
+        (
+          await db.merchandiseItem.findUniqueOrThrow({
+            where: { id: editable.id },
+          })
+        ).name,
+      );
     await page
       .locator("dialog[open]")
       .getByRole("button", { name: "Delete item" })

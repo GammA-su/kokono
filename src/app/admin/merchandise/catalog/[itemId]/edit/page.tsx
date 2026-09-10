@@ -4,21 +4,36 @@ import { z } from "zod";
 import { requireAdminPage } from "@/lib/admin";
 import { db } from "@/lib/db";
 import { ItemForm } from "@/components/admin/item-form";
+import { ItemImages } from "@/components/admin/item-images";
 export const metadata = { title: "Edit merchandise item" };
 
 export default async function EditItem({
   params,
+  searchParams,
 }: {
   params: Promise<{ itemId: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   await requireAdminPage();
   const { itemId } = await params;
+  const query = await searchParams;
+  const notices: Record<string, string> = {
+    "image-added": "Image added.",
+    "image-approval": "Image visibility updated.",
+    "image-removed": "Image deleted.",
+  };
+  const notice =
+    typeof query.notice === "string" ? notices[query.notice] : null;
   if (!z.uuid().safeParse(itemId).success) notFound();
   const item = await db.merchandiseItem.findUnique({
     where: { id: itemId },
     include: {
       lineup: { select: { id: true, name: true, archivedAt: true, franchiseId: true } },
       characters: { select: { characterId: true } },
+      images: {
+        orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+        include: { listingImages: { select: { listingId: true } } },
+      },
     },
   });
   if (!item) notFound();
@@ -29,7 +44,7 @@ export default async function EditItem({
     }),
     db.character.findMany({
       where: { franchiseId: item.lineup.franchiseId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, japaneseName: true, aliases: true },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -55,6 +70,11 @@ export default async function EditItem({
         <p className="alert" role="status">
           This item is archived. Saving keeps it archived; restore it from the
           item page to make it visible again.
+        </p>
+      )}
+      {notice && (
+        <p className="alert success" role="status">
+          {notice}
         </p>
       )}
       {item.lineup.archivedAt && (
@@ -83,6 +103,18 @@ export default async function EditItem({
           officialMsrpTaxInclusion: item.officialMsrpTaxInclusion,
           characterIds: item.characters.map((link) => link.characterId),
         }}
+      />
+      <ItemImages
+        itemId={item.id}
+        images={item.images.map((image) => ({
+          id: image.id,
+          storageKey: image.storageKey,
+          caption: image.caption,
+          imageRole: image.imageRole,
+          approvedForPublicUse: image.approvedForPublicUse,
+          sourceProvider: image.sourceProvider,
+          usedByListing: image.listingImages.length > 0,
+        }))}
       />
     </>
   );

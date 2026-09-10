@@ -24,7 +24,7 @@ export default async function NewItem({
     }),
     db.character.findMany({
       where: { franchiseId: lineup.franchiseId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, japaneseName: true, aliases: true },
       orderBy: { name: "asc" },
     }),
   ]);

@@ -5,12 +5,16 @@ import { assertInternalAccount } from "../src/modules/auth/authorization";
 import { createCatalogService } from "../src/modules/catalog/service";
 import { createLocationService } from "../src/modules/locations/service";
 import { applyInventoryOperation } from "../src/modules/inventory/operations";
+import { createPublicationService } from "../src/modules/publication/service";
+import { makePublicationReady, pngBytes } from "./publication-fixture";
+import { saveImage } from "../src/modules/media/storage";
 
 const database = createDatabaseClient(inject("testDatabaseUrl"));
 let internalId: string;
 const authorize = async () => assertInternalAccount(database, internalId);
 const catalog = createCatalogService(database, authorize);
 const locations = createLocationService(database, authorize);
+const publication = createPublicationService(database, authorize);
 
 beforeAll(async () => {
   const user = await database.user.create({
@@ -280,5 +284,85 @@ describe("catalog item editing", () => {
     expect(
       await database.franchise.findUnique({ where: { id: empty.id } }),
     ).toBeNull();
+  });
+
+  it("adds, approves and withdraws an image", async () => {
+    const f = await fixture();
+    const storageKey = await saveImage(
+      new File([pngBytes], "added.png", { type: "image/png" }),
+    );
+    const image = await catalog.addImage({
+      merchandiseItemId: f.item.id,
+      storageKey,
+      caption: "Added from the item form",
+    });
+    // Uploading must never imply publication consent.
+    expect(image.approvedForPublicUse).toBe(false);
+    expect(
+      (await catalog.setImageApproval({ imageId: image.id, approved: true }))
+        .approvedForPublicUse,
+    ).toBe(true);
+    expect(
+      (await catalog.setImageApproval({ imageId: image.id, approved: false }))
+        .approvedForPublicUse,
+    ).toBe(false);
+    const { storageKey: removed } = await catalog.removeImage(image.id);
+    expect(removed).toBe(storageKey);
+    expect(
+      await database.itemImage.findUnique({ where: { id: image.id } }),
+    ).toBeNull();
+  });
+
+  /**
+   * Storefront visibility requires an approved image. Withdrawing the last one would make a
+   * published product silently disappear from the shop, so it is refused instead.
+   */
+  it("refuses to withdraw the only approved image of a published product", async () => {
+    const f = await fixture();
+    // Creates the approved image and the public category mapping publication requires.
+    const image = await makePublicationReady(database, f.item.id);
+    const fresh = await database.merchandiseItem.findUniqueOrThrow({
+      where: { id: f.item.id },
+    });
+    await publication.publishReviewed({
+      listing: {
+        merchandiseItemId: f.item.id,
+        slug: `published-${f.suffix}`,
+        sellingPriceAmount: 2500,
+        sellingPriceCurrency: "EUR",
+        imageIds: [image.id],
+      },
+      expectedListingUpdatedAt: null,
+      expectedItemUpdatedAt: fresh.updatedAt.toISOString(),
+      published: true,
+    });
+    const listing = await database.saleListing.findUniqueOrThrow({
+      where: { merchandiseItemId: f.item.id },
+      include: { images: true },
+    });
+    expect(listing.published).toBe(true);
+    const selected = listing.images[0].itemImageId;
+    await expect(
+      catalog.setImageApproval({ imageId: selected, approved: false }),
+    ).rejects.toMatchObject({ code: "LAST_PUBLIC_IMAGE" });
+
+    // An image a listing selected cannot be deleted out from under it either.
+    await expect(catalog.removeImage(selected)).rejects.toMatchObject({
+      code: "IMAGE_IN_USE",
+    });
+
+    // Unpublishing removes the reason for the guard, so the operator regains control.
+    await publication.setPublished({
+      merchandiseItemId: f.item.id,
+      published: false,
+    });
+    expect(
+      (
+        await catalog.setImageApproval({
+          imageId: selected,
+          approved: false,
+        })
+      ).approvedForPublicUse,
+    ).toBe(false);
   });
 });
